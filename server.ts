@@ -1,54 +1,42 @@
-const express = require("express");
+import express, { Request, Response, NextFunction } from "express";
 const app = express();
-const cors = require("cors");
-const cookieParser = require("cookie-parser");
-const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
-
-// mongoose/mongodb
-const mongoose = require("mongoose");
-
-// dotenv
-require("dotenv").config();
-
-// port
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+dotenv.config();
+import path from "path";
 const PORT = process.env.PORT || 4000;
 
-// path
-const path = require("path");
-
-// import routes
-const root = require("./routes/root");
-const taskRoutes = require("./routes/taskRoutes");
-const eventRoutes = require("./routes/eventRoutes");
-const budgetRoutes = require("./routes/budgetRoutes");
-const expenseRoutes = require("./routes/expenseRoutes");
-const clientRoutes = require("./routes/clientRoutes");
-const vendorRoutes = require("./routes/vendorRoutes");
-const authRoutes = require("./routes/authRoutes");
-const organizationRoutes = require("./routes/organizationRoutes");
-const userRoutes = require("./routes/userRoutes");
+// routes
+import root from "./routes/root";
+import taskRoutes from "./routes/taskRoutes";
+import eventRoutes from "./routes/eventRoutes";
+import budgetRoutes from "./routes/budgetRoutes";
+import expenseRoutes from "./routes/expenseRoutes";
+import clientRoutes from "./routes/clientRoutes";
+import vendorRoutes from "./routes/vendorRoutes";
+import authRoutes from "./routes/authRoutes";
+import organizationRoutes from "./routes/organizationRoutes";
+import userRoutes from "./routes/userRoutes";
 
 // connect to MongoDB
 mongoose.connect(process.env.DATABASE_URI);
 
-require("dotenv").config();
-
 // cors
 app.use(
   cors({
-    // origin: "http://localhost:5173",
-    origin: "https://planit.traceykadenyi.com",
+    origin: "http://localhost:5173",
+    // origin: "https://planit.traceykadenyi.com",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   }),
 );
 
-// cookie-parser
 app.use(cookieParser());
-
-// Security headers
 app.use(helmet());
 
 // ========== RATE LIMITING SETUP ==========
@@ -58,7 +46,7 @@ const refreshTokenLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 30, // 30 refresh attempts per minute (more permissive)
   message: "Too many token refresh attempts. Please slow down.",
-  handler: (req, res) => {
+  handler: (req: Request, res: Response) => {
     res.status(429).json({
       status: "error",
       message:
@@ -71,7 +59,7 @@ const refreshTokenLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // CHANGE TO 15 AFTER DEVELOPMENT
   max: 100, // CHANGE TO 10 AFTER DEVELOPMENT
-  handler: (req, res) => {
+  handler: (req: Request, res: Response) => {
     res.status(429).json({
       status: "error",
       message:
@@ -79,52 +67,6 @@ const authLimiter = rateLimit({
     });
   },
 });
-
-// Add this before your routes
-// let requestCounts = {};
-
-// app.use((req, res, next) => {
-//   const path = req.path;
-//   const ip = req.ip;
-
-//   if (!requestCounts[ip]) {
-//     requestCounts[ip] = {};
-//   }
-
-//   if (!requestCounts[ip][path]) {
-//     requestCounts[ip][path] = 0;
-//   }
-
-//   requestCounts[ip][path]++;
-
-//   // Log refresh token requests
-//   if (path.includes('refresh-token')) {
-//     console.log(`Refresh token request #${requestCounts[ip][path]} from ${ip} at ${new Date().toISOString()}`);
-//   }
-
-//   next();
-// });
-
-// Add a debug endpoint to see counts
-app.get("/api/debug/rate-limit-status", (req, res) => {
-  res.json({
-    requestCounts,
-    totalRefreshTokens: Object.values(requestCounts).reduce((acc, ipData) => {
-      return acc + (ipData["/api/auth/refresh-token"] || 0);
-    }, 0),
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// General rate limiting for all other API routes
-// const generalLimiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // limit each IP to 100 requests per windowMs
-//   message: "Too many requests from this IP, please try again later.",
-//   // Skip refresh-token since we have a separate limiter for it
-//   skip: (req) => req.originalUrl === "/api/auth/refresh-token",
-// });
-// app.use("/api/", generalLimiter);
 
 // Apply refresh token limiter specifically to refresh-token endpoint
 app.use("/api/auth/refresh-token", refreshTokenLimiter);
@@ -139,8 +81,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // Add this before your other routes in server.js
-app.get("/api/debug-cookies-set", (req, res) => {
-  console.log("Setting debug cookie...");
+app.get("/api/debug-cookies-set", (req: Request, res: Response) => {
   res.cookie("debugCookie", "test-value", {
     httpOnly: true,
     secure: false,
@@ -150,8 +91,7 @@ app.get("/api/debug-cookies-set", (req, res) => {
   res.json({ message: "Debug cookie should be set" });
 });
 
-app.get("/api/debug-cookies-check", (req, res) => {
-  console.log("Received cookies:", req.cookies);
+app.get("/api/debug-cookies-check", (req: Request, res: Response) => {
   res.json({
     receivedCookies: req.cookies,
     headers: req.headers,
@@ -171,7 +111,7 @@ app.use("/api/clients", clientRoutes);
 app.use("/api/vendors", vendorRoutes);
 
 // ERROR HANDLING MIDDLEWARE (important for auth)
-app.use((error, req, res, next) => {
+app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(error.stack);
   res.status(500).json({
     message: "Something went wrong!",
@@ -183,7 +123,7 @@ app.use((error, req, res, next) => {
 });
 
 // // Fallback for undefined routes
-app.all(/.*/, (req, res) => {
+app.all(/.*/, (req: Request, res: Response) => {
   res.status(404).json({ message: "Route not found" });
 });
 
