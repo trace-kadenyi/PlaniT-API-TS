@@ -1,16 +1,18 @@
-const express = require("express");
-const router = express.Router();
+import express, { Router } from "express";
 
-const {
+
+import {
   getAllTasks,
   createTask,
   updateTask,
   getTaskById,
   deleteTask,
-} = require("../controllers/taskController");
-const authController = require("../controllers/authController");
-const { authorize } = require("../middleware/authmiddleware");
-const { PERMISSIONS, RESOURCES } = require("../services/permissionService");
+} from "../controllers/taskController";
+import authController from "../controllers/authController";
+import { authorize } from "../middleware/authmiddleware";
+import { PERMISSIONS, RESOURCES } from "../services/permissionService";
+
+const router: Router = express.Router();
 
 // 🔐 Protect all task routes
 router.use(authController.protect);
@@ -34,4 +36,4 @@ router.delete(
   deleteTask,
 );
 
-module.exports = router;
+export default router;
