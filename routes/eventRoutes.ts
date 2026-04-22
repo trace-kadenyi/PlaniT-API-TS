@@ -1,7 +1,6 @@
-const express = require("express");
-const router = express.Router();
+import express, { Router } from "express";
 
-const {
+import {
   createEvent,
   getAllEvents,
   getEventById,
@@ -9,11 +8,12 @@ const {
   deleteEvent,
   archiveEvent,
   restoreEvent,
-} = require("../controllers/eventController");
-const authController = require("../controllers/authController");
-const { authorize } = require("../middleware/authmiddleware");
-const { PERMISSIONS, RESOURCES } = require("../services/permissionService");
+} from "../controllers/eventController";
+import authController from "../controllers/authController";
+import { authorize } from "../middleware/authmiddleware";
+import { PERMISSIONS, RESOURCES } from "../services/permissionService";
 
+const router: Router = express.Router();
 // 🔐 Protect all routes
 router.use(authController.protect);
 
@@ -50,4 +50,4 @@ router.delete(
   deleteEvent,
 );
 
-module.exports = router;
+export default router;
