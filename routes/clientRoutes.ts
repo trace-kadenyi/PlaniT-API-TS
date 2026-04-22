@@ -1,7 +1,6 @@
-const express = require("express");
-const router = express.Router();
+import express, { Router } from "express";
 
-const {
+import {
   createClient,
   getAllClients,
   getClientWithEvents,
@@ -10,11 +9,13 @@ const {
   restoreClient,
   deleteClient,
   deleteAllClients,
-} = require("../controllers/clientController");
-const { authorize } = require("../middleware/authmiddleware");
-const { PERMISSIONS, RESOURCES } = require("../services/permissionService");
+} from "../controllers/clientController";
+import { authorize } from "../middleware/authmiddleware";
+import { PERMISSIONS, RESOURCES } from "../services/permissionService";
 
-const authController = require("../controllers/authController");
+import authController from "../controllers/authController";
+
+const router: Router = express.Router();
 
 // ========== PROTECT ALL ROUTES ==========
 router.use(authController.protect);
@@ -63,4 +64,4 @@ router.delete(
   deleteAllClients,
 );
 
-module.exports = router;
+export default router;

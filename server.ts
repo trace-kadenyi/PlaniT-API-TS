@@ -23,7 +23,7 @@ import organizationRoutes from "./routes/organizationRoutes";
 import userRoutes from "./routes/userRoutes";
 
 // connect to MongoDB
-mongoose.connect(process.env.DATABASE_URI);
+mongoose.connect(process.env.DATABASE_URI as string);
 
 // cors
 app.use(

@@ -1,7 +1,6 @@
-const express = require("express");
-const router = express.Router();
+import express, { Router } from "express";
 
-const {
+import {
   createVendor,
   getAllVendors,
   getVendorById,
@@ -10,11 +9,13 @@ const {
   getVendorStats,
   deleteVendor,
   deleteAllVendors,
-} = require("../controllers/vendorController");
-const { authorize } = require("../middleware/authmiddleware");
-const { PERMISSIONS, RESOURCES } = require("../services/permissionService");
+} from "../controllers/vendorController";
+import { authorize } from "../middleware/authmiddleware";
+import { PERMISSIONS, RESOURCES } from "../services/permissionService";
 
-const authController = require("../controllers/authController");
+import authController from "../controllers/authController";
+
+const router: Router = express.Router();
 
 // ========== PROTECT ALL ROUTES ==========
 router.use(authController.protect);
@@ -63,4 +64,4 @@ router.delete(
   deleteAllVendors,
 );
 
-module.exports = router;
+export default router;
