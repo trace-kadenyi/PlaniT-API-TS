@@ -1,5 +1,6 @@
 import express, { Router } from "express";
-const path = require("path");
+import path from "path";
+
 const router: Router = express.Router();
 
 router.get(["/", "/index.html"], (req, res) => {
