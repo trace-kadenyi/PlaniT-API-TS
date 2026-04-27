@@ -1,20 +1,21 @@
-const mongoose = require("mongoose");
+import mongoose, { Schema } from "mongoose";
+import { IExpenseAuditLog } from "../types/models";
 
-const expenseAuditLogSchema = new mongoose.Schema(
+const expenseAuditLogSchema = new Schema<IExpenseAuditLog>(
   {
     // Core identifiers
     expenseId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Expense",
       required: true,
     },
     eventId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Event",
       required: true,
     },
     organizationId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Organization",
       required: true,
       index: true,
@@ -35,13 +36,13 @@ const expenseAuditLogSchema = new mongoose.Schema(
 
     // User who performed the action
     performedBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
     performedBySnapshot: {
       _id: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: Schema.Types.ObjectId,
       },
       firstName: String,
       lastName: String,
@@ -53,22 +54,22 @@ const expenseAuditLogSchema = new mongoose.Schema(
     changes: [
       {
         field: String,
-        oldValue: mongoose.Schema.Types.Mixed,
-        newValue: mongoose.Schema.Types.Mixed,
+        oldValue: Schema.Types.Mixed,
+        newValue: Schema.Types.Mixed,
       },
     ],
 
     // Data snapshots for context
     previousData: {
-      type: mongoose.Schema.Types.Mixed,
+      type: Schema.Types.Mixed,
     },
     newData: {
-      type: mongoose.Schema.Types.Mixed,
+      type: Schema.Types.Mixed,
     },
 
     // For DELETE actions - store complete expense data
     deletedData: {
-      type: mongoose.Schema.Types.Mixed,
+      type: Schema.Types.Mixed,
     },
 
     // Context and notes
@@ -123,4 +124,7 @@ expenseAuditLogSchema.index({ isAmountChange: 1 });
 expenseAuditLogSchema.index({ isPaymentStatusChange: 1 });
 expenseAuditLogSchema.index({ isDeleted: 1 });
 
-module.exports = mongoose.model("ExpenseAuditLog", expenseAuditLogSchema);
+export default mongoose.model<IExpenseAuditLog>(
+  "ExpenseAuditLog",
+  expenseAuditLogSchema,
+);
