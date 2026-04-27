@@ -1,20 +1,21 @@
-const mongoose = require("mongoose");
+import mongoose, { Schema } from "mongoose";
+import { IUserUpdateHistory } from "../types/models";
 
-const userUpdateHistorySchema = new mongoose.Schema(
+const userUpdateHistorySchema = new Schema<IUserUpdateHistory>(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
     organization: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Organization",
       required: true,
       index: true,
     },
     updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
@@ -26,8 +27,8 @@ const userUpdateHistorySchema = new mongoose.Schema(
     changes: [
       {
         field: String,
-        oldValue: mongoose.Schema.Types.Mixed,
-        newValue: mongoose.Schema.Types.Mixed,
+        oldValue: Schema.Types.Mixed,
+        newValue: Schema.Types.Mixed,
       },
     ],
     type: {
@@ -54,4 +55,7 @@ const userUpdateHistorySchema = new mongoose.Schema(
 userUpdateHistorySchema.index({ userId: 1, createdAt: -1 });
 userUpdateHistorySchema.index({ updatedBy: 1 });
 
-module.exports = mongoose.model("UserUpdateHistory", userUpdateHistorySchema);
+export default mongoose.model<IUserUpdateHistory>(
+  "UserUpdateHistory",
+  userUpdateHistorySchema,
+);
