@@ -37,7 +37,7 @@ const createVendor = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     const message = err instanceof Error ? err.message : "An error occurred";
-    res.status(500).json({ message });
+    res.status(500).json({ error: message });
   }
 };
 
@@ -71,7 +71,7 @@ const getAllVendors = async (req: Request, res: Response): Promise<void> => {
     res.json(vendors);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "An error occurred";
-    res.status(500).json({ message });
+    res.status(500).json({ error: message });
   }
 };
 
@@ -101,7 +101,7 @@ const getVendorById = async (req: Request, res: Response): Promise<void> => {
     res.json(vendorData);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "An error occurred";
-    res.status(500).json({ message });
+    res.status(500).json({ error: message });
   }
 };
 
@@ -153,7 +153,7 @@ const updateVendor = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     const message = err instanceof Error ? err.message : "An error occurred";
-    res.status(500).json({ message });
+    res.status(500).json({ error: message });
   }
 };
 
@@ -185,7 +185,7 @@ const toggleVendorArchive = async (
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "An error occurred";
-    res.status(500).json({ message });
+    res.status(500).json({ error: message });
   }
 };
 
@@ -212,7 +212,7 @@ const getVendorStats = async (req: Request, res: Response): Promise<void> => {
     res.json(stats);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "An error occurred";
-    res.status(500).json({ message });
+    res.status(500).json({ error: message });
   }
 };
 
@@ -249,7 +249,7 @@ const deleteVendor = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "An error occurred";
-    res.status(500).json({ message });
+    res.status(500).json({ error: message });
   }
 };
 
