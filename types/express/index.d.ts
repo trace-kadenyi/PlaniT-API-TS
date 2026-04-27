@@ -4,7 +4,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: IUser;
-      targetUser?: IUser;
+      targetUser?: IUser | { role: string };
       targetEvent?: IEvent;
       targetExpense?: IExpense;
     }
