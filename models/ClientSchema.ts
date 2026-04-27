@@ -1,6 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose, { Schema } from "mongoose";
+import { IClient } from "../types/models";
 
-const clientSchema = new mongoose.Schema(
+const clientSchema = new Schema<IClient>(
   {
     name: {
       type: String,
@@ -23,7 +24,7 @@ const clientSchema = new mongoose.Schema(
       default: "Individual",
     },
     organizationId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Organization",
       required: true,
       index: true,
@@ -40,13 +41,12 @@ const clientSchema = new mongoose.Schema(
     deletedAt: Date,
     archivedAt: Date,
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
   },
-
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Add middleware to handle population of deleted clients
@@ -64,4 +64,4 @@ const clientSchema = new mongoose.Schema(
 //   }
 // });
 
-module.exports = mongoose.model("Client", clientSchema);
+export default mongoose.model<IClient>("Client", clientSchema);
