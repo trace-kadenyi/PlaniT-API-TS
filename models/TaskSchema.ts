@@ -1,6 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose, { Schema } from "mongoose";
+import { ITask } from "../types/models";
 
-const taskSchema = new mongoose.Schema(
+const taskSchema = new Schema<ITask>(
   {
     title: {
       type: String,
@@ -13,17 +14,17 @@ const taskSchema = new mongoose.Schema(
       required: [true, "Description is required"],
     },
     eventId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Event",
       required: true,
     },
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
     assignedTo: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
     },
     deadline: {
@@ -41,11 +42,11 @@ const taskSchema = new mongoose.Schema(
       default: "To Do",
     },
     updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-module.exports = mongoose.model("Task", taskSchema);
+export default mongoose.model<ITask>("Task", taskSchema);
