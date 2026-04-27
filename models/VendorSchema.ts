@@ -1,6 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose, { Schema } from "mongoose";
+import { IVendor } from "../types/models";
 
-const vendorSchema = new mongoose.Schema(
+const vendorSchema = new Schema<IVendor>(
   {
     name: {
       type: String,
@@ -48,7 +49,7 @@ const vendorSchema = new mongoose.Schema(
       default: false,
     },
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
@@ -56,4 +57,4 @@ const vendorSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("Vendor", vendorSchema);
+export default mongoose.model<IVendor>("Vendor", vendorSchema);
