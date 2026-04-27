@@ -1,19 +1,21 @@
-const Vendor = require("../models/VendorSchema");
+import { Request, Response } from "express";
+import Vendor from "../models/VendorSchema";
 
 const MAX_NOTES = 200;
 
 // Create new vendor
-const createVendor = async (req, res) => {
+const createVendor = async (req: Request, res: Response): Promise<void> => {
   try {
     // Check notes length if provided
     if (req.body.notes && req.body.notes.length > MAX_NOTES) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "ValidationError",
         message: `Vendor notes cannot exceed ${MAX_NOTES} characters`,
         field: "notes",
         maxLength: MAX_NOTES,
         currentLength: req.body.notes.length,
       });
+      return;
     }
 
     const vendorData = {
@@ -25,25 +27,27 @@ const createVendor = async (req, res) => {
     const vendor = await Vendor.create(vendorData);
 
     res.status(201).json(vendor);
-  } catch (err) {
-    if (err.name === "ValidationError") {
-      return res.status(400).json({
-        message: Object.values(err.errors)
-          .map((e) => e.message)
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "ValidationError") {
+      res.status(400).json({
+        message: Object.values((err as any).errors)
+          .map((e: any) => e.message)
           .join(", "),
       });
+      return;
     }
-    res.status(500).json({ message: err.message });
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Get all vendors
-const getAllVendors = async (req, res) => {
+const getAllVendors = async (req: Request, res: Response): Promise<void> => {
   try {
     const { service, archived } = req.query;
 
     // filter by org
-    const filter = {
+    const filter: Record<string, unknown> = {
       organizationId: req.user.organization,
       isDeleted: false,
     };
@@ -65,13 +69,14 @@ const getAllVendors = async (req, res) => {
 
     const vendors = await Vendor.find(filter).sort({ name: 1 });
     res.json(vendors);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Get vendor by ID
-const getVendorById = async (req, res) => {
+const getVendorById = async (req: Request, res: Response): Promise<void> => {
   try {
     const vendor = await Vendor.findOne({
       _id: req.params.id,
@@ -80,35 +85,39 @@ const getVendorById = async (req, res) => {
     });
 
     if (!vendor) {
-      return res.status(404).json({ message: "Vendor not found" });
+      res.status(404).json({ message: "Vendor not found" });
+      return;
     }
 
     // Block viewers from accessing archived vendors directly
     if (vendor.isArchived && req.user.role === "viewer") {
-      return res.status(403).json({
+      res.status(403).json({
         message: "You do not have permission to view archived vendors.",
       });
+      return;
     }
     const vendorData = vendor.toObject();
 
     res.json(vendorData);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Update vendor
-const updateVendor = async (req, res) => {
+const updateVendor = async (req: Request, res: Response): Promise<void> => {
   try {
     // Check notes length if provided in update
     if (req.body.notes && req.body.notes.length > MAX_NOTES) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "ValidationError",
         message: `Notes cannot exceed ${MAX_NOTES} characters`,
         field: "notes",
         maxLength: MAX_NOTES,
         currentLength: req.body.notes.length,
       });
+      return;
     }
 
     const updatedVendor = await Vendor.findOneAndUpdate(
@@ -122,29 +131,37 @@ const updateVendor = async (req, res) => {
     );
 
     if (!updatedVendor) {
-      return res.status(404).json({ message: "Vendor not found" });
+      res.status(404).json({ message: "Vendor not found" });
+      return;
     }
 
-    if (updatedVendor.isArchived)
-      return res.status(409).json({
+    if (updatedVendor.isArchived) {
+      res.status(409).json({
         message: "Cannot update an archived vendor. Unarchive it first.",
       });
+      return;
+    }
 
     res.json(updatedVendor);
-  } catch (err) {
-    if (err.name === "ValidationError") {
-      return res.status(400).json({
-        message: Object.values(err.errors)
-          .map((e) => e.message)
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "ValidationError") {
+      res.status(400).json({
+        message: Object.values((err as any).errors)
+          .map((e: any) => e.message)
           .join(", "),
       });
+      return;
     }
-    res.status(500).json({ message: err.message });
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Archive/unarchive vendor
-const toggleVendorArchive = async (req, res) => {
+const toggleVendorArchive = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const vendor = await Vendor.findOne({
       _id: req.params.id,
@@ -153,7 +170,8 @@ const toggleVendorArchive = async (req, res) => {
     });
 
     if (!vendor) {
-      return res.status(404).json({ message: "Vendor not found" });
+      res.status(404).json({ message: "Vendor not found" });
+      return;
     }
 
     vendor.isArchived = !vendor.isArchived;
@@ -165,13 +183,14 @@ const toggleVendorArchive = async (req, res) => {
       } successfully`,
       vendor,
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Get vendor statistics
-const getVendorStats = async (req, res) => {
+const getVendorStats = async (req: Request, res: Response): Promise<void> => {
   try {
     const stats = await Vendor.aggregate([
       {
@@ -191,13 +210,14 @@ const getVendorStats = async (req, res) => {
     ]);
 
     res.json(stats);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Soft-delete vendor
-const deleteVendor = async (req, res) => {
+const deleteVendor = async (req: Request, res: Response): Promise<void> => {
   try {
     const vendor = await Vendor.findOneAndUpdate(
       {
@@ -214,7 +234,8 @@ const deleteVendor = async (req, res) => {
     );
 
     if (!vendor) {
-      return res.status(404).json({ error: "Vendor not found" });
+      res.status(404).json({ error: "Vendor not found" });
+      return;
     }
 
     res.json({
@@ -223,16 +244,17 @@ const deleteVendor = async (req, res) => {
         _id: vendor._id,
         name: `${vendor.name} (Deleted)`,
         isDeleted: true,
-        deletedAt: vendor.deletedAt,
+        deletedAt: new Date(),
       },
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Soft-delete all vendors
-const deleteAllVendors = async (req, res) => {
+const deleteAllVendors = async (req: Request, res: Response): Promise<void> => {
   try {
     // Delete all vendors
     const deletedVendors = await Vendor.updateMany(
@@ -250,12 +272,13 @@ const deleteAllVendors = async (req, res) => {
       message: "All vendors deleted successfully",
       deletedCount: deletedVendors.modifiedCount,
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ error: message });
   }
 };
 
-module.exports = {
+export {
   createVendor,
   getAllVendors,
   getVendorById,
