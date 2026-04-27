@@ -1,26 +1,32 @@
-const {
+import { Request, Response, NextFunction } from "express";
+
+import {
   checkPermission,
   PERMISSIONS,
   RESOURCES,
-} = require("../services/permissionService");
+} from "../services/permissionService";
 
-// Import models at the top
-const User = require("../models/UserSchema");
-const Expense = require("../models/ExpenseSchema");
-const Event = require("../models/EventSchema");
+import User from "../models/UserSchema";
+import Expense from "../models/ExpenseSchema";
+import Event from "../models/EventSchema";
 
-const authorize = (permission, resource) => {
-  return async (req, res, next) => {
+export const authorize = (permission: string, resource: string) => {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       // ===============================
       // 1️⃣ Authentication check
       // ===============================
       if (!req.user) {
-        return res.status(401).json({
+        res.status(401).json({
           error: "Unauthorized",
           code: "AUTH_REQUIRED",
           message: "You must be logged in to perform this action.",
         });
+        return;
       }
 
       let targetUser = null;
@@ -40,11 +46,12 @@ const authorize = (permission, resource) => {
         });
 
         if (!targetUser) {
-          return res.status(404).json({
+          res.status(404).json({
             error: "Not Found",
             code: "USER_NOT_FOUND",
             message: "User not found.",
           });
+          return;
         }
       }
 
@@ -58,11 +65,12 @@ const authorize = (permission, resource) => {
         });
 
         if (!expense) {
-          return res.status(404).json({
+          res.status(404).json({
             error: "Not Found",
             code: "EXPENSE_NOT_FOUND",
             message: "Expense not found.",
           });
+          return;
         }
 
         // ===============================
@@ -80,11 +88,12 @@ const authorize = (permission, resource) => {
           );
 
           if (!canDeletePaid) {
-            return res.status(403).json({
+            res.status(403).json({
               error: "Forbidden",
               code: "DELETE_PAID_EXPENSE_RESTRICTED",
               message: "Only Super Admins can delete paid expenses.",
             });
+            return;
           }
         }
       }
@@ -100,11 +109,12 @@ const authorize = (permission, resource) => {
         });
 
         if (!event) {
-          return res.status(404).json({
+          res.status(404).json({
             error: "Not Found",
             code: "EVENT_NOT_FOUND",
             message: "Event not found.",
           });
+          return;
         }
       }
 
@@ -125,7 +135,7 @@ const authorize = (permission, resource) => {
       );
 
       if (!hasPermission) {
-        return res.status(403).json({
+        res.status(403).json({
           error: "Forbidden",
           code: "INSUFFICIENT_PERMISSION",
           message: "You do not have permission to perform this action.",
@@ -134,15 +144,17 @@ const authorize = (permission, resource) => {
             resource,
           },
         });
+        return;
       }
 
       if (targetUser) req.targetUser = targetUser;
       if (expense) req.targetExpense = expense;
       if (event) req.targetEvent = event;
+
       next();
     } catch (error) {
       console.error("Authorization error:", error);
-      return res.status(500).json({
+      res.status(500).json({
         error: "Internal Server Error",
         code: "AUTHORIZATION_CHECK_FAILED",
         message: "Authorization check failed.",
@@ -150,5 +162,3 @@ const authorize = (permission, resource) => {
     }
   };
 };
-
-module.exports = { authorize };
