@@ -1,5 +1,5 @@
-import mongoose, {Schema} from "mongoose"
-import {IOrganization} from "../types/models/organization.types"
+import mongoose, { Schema } from "mongoose";
+import { IOrganization } from "../types/models";
 
 const organizationSchema = new Schema<IOrganization>(
   {
@@ -31,7 +31,10 @@ const organizationSchema = new Schema<IOrganization>(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
-export default mongoose.model<IOrganization>("Organization", organizationSchema)
+export default mongoose.model<IOrganization>(
+  "Organization",
+  organizationSchema,
+);
