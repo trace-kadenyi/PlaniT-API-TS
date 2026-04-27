@@ -1,16 +1,17 @@
-const mongoose = require("mongoose");
+import mongoose, { Schema } from "mongoose";
+import { IBudget } from "../types/models";
 
-const budgetSchema = new mongoose.Schema(
+const budgetSchema = new Schema<IBudget>(
   {
     eventId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Event",
       required: true,
       unique: true,
     },
-    
+
     organizationId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Organization",
       required: true,
       index: true,
@@ -66,4 +67,4 @@ budgetSchema.virtual("availableBudget").get(function () {
   return this.remainingBudget;
 });
 
-module.exports = mongoose.model("Budget", budgetSchema);
+export default mongoose.model<IBudget>("Budget", budgetSchema);
