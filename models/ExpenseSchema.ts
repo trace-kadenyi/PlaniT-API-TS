@@ -1,15 +1,16 @@
-const mongoose = require("mongoose");
+import mongoose, { Schema } from "mongoose";
+import { IExpense } from "../types/models";
 
-const expenseSchema = new mongoose.Schema(
+const expenseSchema = new Schema<IExpense>(
   {
     organizationId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Organization",
       required: true,
       index: true,
     },
     eventId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Event",
       required: [true, "Must be linked to an event"],
     },
@@ -42,7 +43,7 @@ const expenseSchema = new mongoose.Schema(
       default: "other",
     },
     vendor: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Vendor",
     },
     paymentStatus: {
@@ -63,13 +64,13 @@ const expenseSchema = new mongoose.Schema(
       match: [/^https?:\/\/.+/, "Invalid receipt URL"],
     },
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
     createdBySnapshot: {
       _id: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: Schema.Types.ObjectId,
         ref: "User",
       },
       firstName: String,
@@ -78,7 +79,7 @@ const expenseSchema = new mongoose.Schema(
       role: String,
     },
     updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
     },
   },
@@ -90,4 +91,4 @@ const expenseSchema = new mongoose.Schema(
 expenseSchema.index({ eventId: 1, category: 1 });
 expenseSchema.index({ organizationId: 1, eventId: 1 });
 
-module.exports = mongoose.model("Expense", expenseSchema);
+export default mongoose.model<IExpense>("Expense", expenseSchema);
