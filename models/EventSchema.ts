@@ -1,6 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose, { Schema } from "mongoose";
+import { IEvent } from "../types/models";
 
-const eventSchema = new mongoose.Schema(
+const eventSchema = new Schema<IEvent>(
   {
     name: {
       type: String,
@@ -16,7 +17,7 @@ const eventSchema = new mongoose.Schema(
       type: Date,
       required: [true, "Date is required"],
       index: true,
-      get: (date) => date?.toISOString(),
+      // get: (date: Date) => date?.toISOString(),
     },
     location: {
       venue: {
@@ -48,34 +49,34 @@ const eventSchema = new mongoose.Schema(
       maxlength: 200,
     },
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: [true, "Event must have a creator"],
     },
     assignedUsers: [
       {
-        type: mongoose.Schema.Types.ObjectId,
+        type: Schema.Types.ObjectId,
         ref: "User",
       },
     ],
     client: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Client",
     },
     vendors: [
       {
-        type: mongoose.Schema.Types.ObjectId,
+        type: Schema.Types.ObjectId,
         ref: "Vendor",
       },
     ],
     organizationId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Organization",
       required: true,
       index: true,
     },
     updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
     },
     isArchived: {
@@ -98,4 +99,4 @@ const eventSchema = new mongoose.Schema(
   },
 );
 
-module.exports = mongoose.model("Event", eventSchema);
+export default mongoose.model<IEvent>("Event", eventSchema);
