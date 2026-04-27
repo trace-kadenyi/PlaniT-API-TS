@@ -67,7 +67,4 @@ const updateOrganization = async (
   }
 };
 
-module.exports = {
-  getOrganizationDetails,
-  updateOrganization,
-};
+export { getOrganizationDetails, updateOrganization };
