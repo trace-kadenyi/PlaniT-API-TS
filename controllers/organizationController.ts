@@ -1,14 +1,19 @@
-const Organization = require("../models/OrganizationSchema");
+import { Request, Response } from "express";
+import Organization from "../models/OrganizationSchema";
 
 // Get organization details
-const getOrganizationDetails = async (req, res) => {
+const getOrganizationDetails = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const organization = await Organization.findById(req.user.organization);
 
     if (!organization) {
-      return res.status(404).json({
+      res.status(404).json({
         message: "Organization not found",
       });
+      return;
     }
 
     res.json({
@@ -17,18 +22,23 @@ const getOrganizationDetails = async (req, res) => {
       plan: organization.plan,
       settings: organization.settings,
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // update org
-const updateOrganization = async (req, res) => {
+const updateOrganization = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { name } = req.body;
 
     if (!name || !name.trim()) {
-      return res.status(400).json({ message: "Organization name is required" });
+      res.status(400).json({ message: "Organization name is required" });
+      return;
     }
 
     const organization = await Organization.findByIdAndUpdate(
@@ -38,7 +48,8 @@ const updateOrganization = async (req, res) => {
     );
 
     if (!organization) {
-      return res.status(404).json({ message: "Organization not found" });
+      res.status(404).json({ message: "Organization not found" });
+      return;
     }
 
     res.json({
@@ -50,8 +61,9 @@ const updateOrganization = async (req, res) => {
         settings: organization.settings,
       },
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
