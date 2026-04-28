@@ -1,8 +1,40 @@
-const Expense = require("../models/ExpenseSchema");
-const ExpenseAuditLog = require("../models/ExpenseAuditLogSchema");
+import { Request } from "express";
+
+import Expense from "../models/ExpenseSchema";
+import ExpenseAuditLog from "../models/ExpenseAuditLogSchema";
+import { IUser, IExpense } from "../types/models";
+
+interface Change {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+interface BudgetSnapshot {
+  totalBudget?: number;
+  totalExpenses?: number;
+  remainingBudget?: number;
+  budgetExists?: boolean;
+}
+
+interface LogExpenseActionParams {
+  actionType: string;
+  expense: IExpense | Record<string, unknown>;
+  previousExpense?: IExpense | Record<string, unknown> | null;
+  user: IUser;
+  reason?: string;
+  description?: string;
+  budgetStatusBefore?: BudgetSnapshot | null;
+  budgetStatusAfter?: BudgetSnapshot | null;
+  req: Request;
+}
 
 // ============= PERMISSION LOG HELPERS =============
-const canPerformExpenseAction = (user, expense, action) => {
+const canPerformExpenseAction = (
+  user: IUser,
+  expense: IExpense | null,
+  action: string,
+): boolean => {
   if (action === "view") return true;
   if (user.role === "viewer") return false;
 
@@ -13,13 +45,16 @@ const canPerformExpenseAction = (user, expense, action) => {
   return ["planner", "admin", "super_admin"].includes(user.role);
 };
 
-const canViewAuditLogs = (user) => {
+const canViewAuditLogs = (user: IUser): boolean => {
   return ["admin", "super_admin"].includes(user.role);
 };
 
 // ============= AUDIT LOG HELPERS =============
-const getChangedFields = (oldExpense, newExpense) => {
-  const changes = [];
+const getChangedFields = (
+  oldExpense: IExpense | Record<string, unknown>,
+  newExpense: IExpense | Record<string, unknown>,
+): Change[] => {
+  const changes: Change[] = [];
   if (!oldExpense || !newExpense) return changes;
 
   const fields = [
@@ -35,16 +70,18 @@ const getChangedFields = (oldExpense, newExpense) => {
   ];
 
   fields.forEach((field) => {
-    const oldValue = oldExpense[field];
-    const newValue = newExpense[field];
+    const oldValue = (oldExpense as Record<string, unknown>)[field];
+    const newValue = (newExpense as Record<string, unknown>)[field];
 
     if (field === "vendor") {
-      // Extract IDs from both values for comparison
-      const getVendorId = (value) => {
+      const getVendorId = (value: unknown): string | null => {
         if (!value) return null;
         if (typeof value === "string") return value;
-        if (value._id) return value._id.toString();
-        if (value.toString) return value.toString();
+        if (typeof value === "object" && value !== null) {
+          const obj = value as Record<string, unknown>;
+          if (obj._id) return String(obj._id);
+          return String(value);
+        }
         return null;
       };
 
@@ -60,15 +97,15 @@ const getChangedFields = (oldExpense, newExpense) => {
       }
     } else if (field === "paymentDate" || field === "dueDate") {
       // Handle date comparisons properly
-      const oldDate = oldValue ? new Date(oldValue).toISOString() : null;
-      const newDate = newValue ? new Date(newValue).toISOString() : null;
+      const oldDate = oldValue
+        ? new Date(oldValue as string).toISOString()
+        : null;
+      const newDate = newValue
+        ? new Date(newValue as string).toISOString()
+        : null;
 
       if (oldDate !== newDate) {
-        changes.push({
-          field,
-          oldValue: oldValue ? new Date(oldValue).toISOString() : null,
-          newValue: newValue ? new Date(newValue).toISOString() : null,
-        });
+        changes.push({ field, oldValue: oldDate, newValue: newDate });
       }
     } else if (oldValue !== newValue) {
       changes.push({ field, oldValue, newValue });
@@ -78,7 +115,11 @@ const getChangedFields = (oldExpense, newExpense) => {
   return changes;
 };
 
-const determineActionType = (changes, isCreate, isDelete) => {
+const determineActionType = (
+  changes: Change[],
+  isCreate: boolean,
+  isDelete: boolean,
+): string => {
   if (isCreate) return "CREATE";
   if (isDelete) return "DELETE";
   if (changes.find((c) => c.field === "amount")) return "AMOUNT_CHANGE";
@@ -96,25 +137,32 @@ const logExpenseAction = async ({
   budgetStatusBefore,
   budgetStatusAfter,
   req,
-}) => {
+}: LogExpenseActionParams): Promise<void> => {
   try {
     const changes = previousExpense
-      ? getChangedFields(previousExpense, expense)
+      ? getChangedFields(
+          previousExpense as Record<string, unknown>,
+          expense as Record<string, unknown>,
+        )
       : [];
 
-    const expenseObj = expense.toObject?.() ?? expense;
+    const expenseObj =
+      typeof (expense as IExpense).toObject === "function"
+        ? (expense as IExpense).toObject()
+        : (expense as Record<string, unknown>);
 
-    const createdBySnapshot = expenseObj.createdBySnapshot ?? {
-      _id: expenseObj.createdBy?._id ?? expenseObj.createdBy,
-      firstName: expenseObj.createdBy?.firstName,
-      lastName: expenseObj.createdBy?.lastName,
-      email: expenseObj.createdBy?.email,
-      role: expenseObj.createdBy?.role,
+    const createdBySnapshot = (expenseObj as Record<string, unknown>)
+      .createdBySnapshot ?? {
+      _id: (expenseObj as any).createdBy?._id ?? (expenseObj as any).createdBy,
+      firstName: (expenseObj as any).createdBy?.firstName,
+      lastName: (expenseObj as any).createdBy?.lastName,
+      email: (expenseObj as any).createdBy?.email,
+      role: (expenseObj as any).createdBy?.role,
     };
 
-    const logData = {
+    const logData: Record<string, unknown> = {
       expenseId: expense._id,
-      eventId: expense.eventId,
+      eventId: (expense as IExpense).eventId,
       organizationId: user.organization,
       actionType,
       performedBy: user._id,
@@ -139,17 +187,19 @@ const logExpenseAction = async ({
     };
 
     if (previousExpense) {
-      logData.previousData = previousExpense.toObject?.() ?? previousExpense;
+      logData.previousData =
+        typeof (previousExpense as IExpense).toObject === "function"
+          ? (previousExpense as IExpense).toObject()
+          : previousExpense;
     }
-
     if (actionType !== "DELETE") {
       logData.newData = {
-        ...expenseObj,
+        ...(expenseObj as object),
         createdBySnapshot: expenseObj.createdBySnapshot ?? createdBySnapshot,
       };
     } else {
       logData.deletedData = {
-        ...expenseObj,
+        ...(expenseObj as object),
         createdBySnapshot: expenseObj.createdBySnapshot ?? createdBySnapshot,
       };
     }
@@ -162,12 +212,12 @@ const logExpenseAction = async ({
     }
 
     await ExpenseAuditLog.create(logData);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to create audit log:", error);
   }
 };
 
-module.exports = {
+export {
   canPerformExpenseAction,
   canViewAuditLogs,
   getChangedFields,
