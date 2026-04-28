@@ -1,4 +1,4 @@
-import { IUser, IEvent, IExpense } from "../models";
+import { IUser, IEvent, IExpense } from "../models/index";
 
 declare global {
   namespace Express {
