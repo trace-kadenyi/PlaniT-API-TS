@@ -488,7 +488,7 @@ const reactivateUser = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-module.exports = {
+export {
   getUsers,
   getUser,
   createUser,
