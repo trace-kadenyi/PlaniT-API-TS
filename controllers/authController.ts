@@ -1,24 +1,30 @@
-const crypto = require("crypto");
-const jwt = require("jsonwebtoken");
+import { NextFunction, Request, Response } from "express";
+import crypto from "crypto";
+import jwt, { JwtPayload } from "jsonwebtoken";
 
-const User = require("../models/UserSchema");
-const Organization = require("../models/OrganizationSchema");
-const { getBasePermissionsForRole } = require("../services/permissionService");
+import User from "../models/UserSchema";
+import Organization from "../models/OrganizationSchema";
+import { getBasePermissionsForRole } from "../services/permissionService";
+import { IUser } from "../types/models";
 
 // Generate JWT tokens
-const signToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN,
+const signToken = (id: string): string => {
+  return jwt.sign({ id }, process.env.JWT_SECRET as string, {
+    expiresIn: process.env.JWT_EXPIRES_IN as any,
   });
 };
 
 // In createSendToken function, add logging:
-const createSendToken = (user, statusCode, res) => {
-  const accessToken = signToken(user._id);
+const createSendToken = (
+  user: IUser,
+  statusCode: number,
+  res: Response,
+): void => {
+  const accessToken = signToken(user._id.toString());
   const refreshToken = jwt.sign(
     { id: user._id },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN },
+    process.env.JWT_REFRESH_SECRET as string,
+    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN as any },
   );
 
   const isProduction = process.env.NODE_ENV === "production";
@@ -32,7 +38,7 @@ const createSendToken = (user, statusCode, res) => {
 
   // Generate permissions based on role
   const permissions = getBasePermissionsForRole(user.role);
-  user.password = undefined;
+  user.password = undefined as any;
 
   res.status(statusCode).json({
     status: "success",
@@ -52,7 +58,7 @@ const createSendToken = (user, statusCode, res) => {
 };
 
 // Signup
-exports.signup = async (req, res) => {
+exports.signup = async (req: Request, res: Response): Promise<void> => {
   try {
     const { firstName, lastName, email, password, organizationName } = req.body;
 
@@ -73,30 +79,34 @@ exports.signup = async (req, res) => {
     });
 
     createSendToken(newUser, 201, res);
-  } catch (err) {
+  } catch (err: unknown) {
     // Enhanced error handling for duplicate emails
-    if (err.code === 11000) {
+    if ((err as any).code === 11000) {
       // Check if it's an email+organization duplicate
       if (
-        err.keyPattern &&
-        err.keyPattern.email &&
-        err.keyPattern.organization
+        (err as any).keyPattern &&
+        (err as any).keyPattern.email &&
+        (err as any).keyPattern.organization
       ) {
-        return res.status(400).json({
+        res.status(400).json({
           status: "error",
           message: "This email is already registered in your organization",
         });
+        return;
       }
     }
 
     // Enhanced error handling
-    if (err.name === "ValidationError") {
-      const messages = Object.values(err.errors).map((e) => e.message);
-      return res.status(400).json({
+    if (err instanceof Error && err.name === "ValidationError") {
+      const messages = Object.values((err as any).errors).map(
+        (e: any) => e.message,
+      );
+      res.status(400).json({
         status: "error",
         message: messages.join(", "),
-        validationErrors: err.errors, // Send detailed errors
+        validationErrors: (err as any).errors, // Send detailed errors
       });
+      return;
     }
 
     // Handle duplicate email error
@@ -107,54 +117,56 @@ exports.signup = async (req, res) => {
     //   });
     // }
 
-    res.status(400).json({
-      status: "error",
-      message:
-        err.message || "Something went wrong while creating the account.",
-    });
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(400).json({ status: "error", message });
   }
 };
 
 // Login
-exports.login = async (req, res) => {
+exports.login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
     // Check if email and password exist
     if (!email || !password) {
-      return res.status(400).json({
+      res.status(400).json({
         status: "error",
         message: "Please provide email and password",
       });
+      return;
     }
 
     // Check if user email exists
     const userEmail = await User.findOne({ email });
 
-    if (!userEmail)
-      return res.status(401).json({
+    if (!userEmail) {
+      res.status(401).json({
         status: "error",
         message: "Email does not exist on our system",
       });
+      return;
+    }
 
     // Check if user exists && password is correct
     const user = await User.findOne({ email }).select("+password");
 
     if (!user || !(await user.correctPassword(password, user.password))) {
-      return res.status(401).json({
+      res.status(401).json({
         status: "error",
         message: "Incorrect password",
       });
+      return;
     }
 
     // check if user is deactivated
     if (user.isDeactivated || !user.isActive) {
-      return res.status(401).json({
+      res.status(401).json({
         status: "error",
         message:
           "This account has been deactivated. Contact a super admin to reactivate",
         code: "ACCOUNT_DEACTIVATED",
       });
+      return;
     }
 
     // Update last login
@@ -163,47 +175,52 @@ exports.login = async (req, res) => {
 
     // If everything ok, send token to client
     createSendToken(user, 200, res);
-  } catch (err) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
     res.status(400).json({
       status: "error",
-      message: err.message,
+      message,
     });
   }
 };
 
 // Refresh token
-exports.refreshToken = async (req, res) => {
+exports.refreshToken = async (req: Request, res: Response): Promise<void> => {
   try {
     const refreshToken = req.cookies.refreshToken; // Get from cookie
 
     if (!refreshToken) {
-      return res
-        .status(401)
-        .json({ status: "error", message: "No refresh token" });
+      res.status(401).json({ status: "error", message: "No refresh token" });
+      return;
     }
 
     // Verify refresh token
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.JWT_REFRESH_SECRET as string,
+    ) as jwt.JwtPayload;
 
     // Check if user still exists
     const currentUser = await User.findById(decoded.id);
     if (!currentUser) {
-      return res.status(401).json({
+      res.status(401).json({
         status: "error",
         message: "The user belonging to this token no longer exists",
       });
+      return;
     }
 
     // Check if user changed password after the token was issued
     if (currentUser.changedPasswordAfter(decoded.iat)) {
-      return res.status(401).json({
+      res.status(401).json({
         status: "error",
         message: "User recently changed password! Please log in again",
       });
+      return;
     }
 
     // If everything is ok, create new access token
-    const accessToken = signToken(currentUser._id);
+    const accessToken = signToken(currentUser._id.toString());
 
     const permissions = getBasePermissionsForRole(currentUser.role);
 
@@ -222,7 +239,7 @@ exports.refreshToken = async (req, res) => {
         },
       },
     });
-  } catch (err) {
+  } catch (err: unknown) {
     res.status(401).json({
       status: "error",
       message: "Invalid refresh token",
@@ -231,15 +248,17 @@ exports.refreshToken = async (req, res) => {
 };
 
 // Forgot password
-exports.forgotPassword = async (req, res) => {
+exports.forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  let user: IUser | null = null;
   try {
     // 1) Get user based on POSTed email
-    const user = await User.findOne({ email: req.body.email });
+    user = await User.findOne({ email: req.body.email });
     if (!user) {
-      return res.status(404).json({
+      res.status(404).json({
         status: "error",
         message: "There is no user with that email address",
       });
+      return;
     }
 
     // 2) Generate the random reset token
@@ -253,7 +272,7 @@ exports.forgotPassword = async (req, res) => {
       message: "Token sent to email!",
       resetToken, // In production, remove this line and actually send email
     });
-  } catch (err) {
+  } catch (err: unknown) {
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
     await user.save({ validateBeforeSave: false });
@@ -266,12 +285,12 @@ exports.forgotPassword = async (req, res) => {
 };
 
 // Reset password
-exports.resetPassword = async (req, res) => {
+exports.resetPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     // 1) Get user based on the token
     const hashedToken = crypto
       .createHash("sha256")
-      .update(req.params.token)
+      .update(req.params.token as string)
       .digest("hex");
 
     const user = await User.findOne({
@@ -281,10 +300,11 @@ exports.resetPassword = async (req, res) => {
 
     // 2) If token has not expired, and there is user, set the new password
     if (!user) {
-      return res.status(400).json({
+      res.status(400).json({
         status: "error",
         message: "Token is invalid or has expired",
       });
+      return;
     }
 
     user.password = req.body.password;
@@ -295,19 +315,21 @@ exports.resetPassword = async (req, res) => {
     // 3) Update changedPasswordAt property for the user
     // 4) Log the user in, send JWT
     createSendToken(user, 200, res);
-  } catch (err) {
-    res.status(400).json({
-      status: "error",
-      message: err.message,
-    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(400).json({ status: "error", message });
   }
 };
 
 // Protect middleware (to be used in routes)
-exports.protect = async (req, res, next) => {
+exports.protect = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     // 1) Getting token and check if it's there
-    let token;
+    let token: string | undefined;
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer")
@@ -316,36 +338,42 @@ exports.protect = async (req, res, next) => {
     }
 
     if (!token) {
-      return res.status(401).json({
+      res.status(401).json({
         status: "error",
         message: "You are not logged in! Please log in to get access",
       });
+      return;
     }
 
     // 2) Verification token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string,
+    ) as JwtPayload;
 
     // 3) Check if user still exists
     const currentUser = await User.findById(decoded.id);
     if (!currentUser) {
-      return res.status(401).json({
+      res.status(401).json({
         status: "error",
         message: "The user belonging to this token no longer exists",
       });
+      return;
     }
 
     // 4) Check if user changed password after the token was issued
     if (currentUser.changedPasswordAfter(decoded.iat)) {
-      return res.status(401).json({
+      res.status(401).json({
         status: "error",
         message: "User recently changed password! Please log in again",
       });
+      return;
     }
 
     // GRANT ACCESS TO PROTECTED ROUTE
     req.user = currentUser;
     next();
-  } catch (err) {
+  } catch (err: unknown) {
     res.status(401).json({
       status: "error",
       message: "Invalid token",
@@ -354,20 +382,21 @@ exports.protect = async (req, res, next) => {
 };
 
 // Restrict to certain roles
-exports.restrictTo = (...roles) => {
-  return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
+exports.restrictTo = (...roles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!roles.includes(req.user.role as string)) {
+      res.status(403).json({
         status: "error",
         message: "You do not have permission to perform this action",
       });
+      return;
     }
     next();
   };
 };
 
 // Logout - clear the refresh token cookie
-exports.logout = (req, res) => {
+exports.logout = (req: Request, res: Response): void => {
   const isProduction = process.env.NODE_ENV === "production";
 
   res.cookie("refreshToken", "loggedout", {
