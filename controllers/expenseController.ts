@@ -1,22 +1,34 @@
-const mongoose = require("mongoose");
+import { Request, Response } from "express";
+import mongoose from "mongoose";
 
-const Event = require("../models/EventSchema");
-const Expense = require("../models/ExpenseSchema");
-const Budget = require("../models/BudgetSchema");
-const ExpenseAuditLog = require("../models/ExpenseAuditLogSchema");
-const Vendor = require("../models/VendorSchema");
-const { getBudgetStatus } = require("../utils/budgetHelpers");
-const {
+import Event from "../models/EventSchema";
+import Expense from "../models/ExpenseSchema";
+import Budget from "../models/BudgetSchema";
+import ExpenseAuditLog from "../models/ExpenseAuditLogSchema";
+import Vendor from "../models/VendorSchema";
+import { getBudgetStatus } from "../utils/budgetHelpers";
+import {
   getChangedFields,
   determineActionType,
   logExpenseAction,
-} = require("../utils/auditHelpers");
+} from "../utils/auditHelpers";
+import { IEvent } from "../types/models";
 
 const MAX_DESCRIPTION = 150;
 const MAX_NOTES = 200;
 
+interface ValidationError {
+  error: string;
+  message: string;
+  field: string;
+  maxLength: number;
+  currentLength: number;
+}
+
 //  validate field lengths
-const validateFieldLengths = (body) => {
+const validateFieldLengths = (
+  body: Record<string, any>,
+): ValidationError | null => {
   if (body.description && body.description.length > MAX_DESCRIPTION) {
     return {
       error: "ValidationError",
@@ -39,13 +51,16 @@ const validateFieldLengths = (body) => {
 };
 
 // Create new expense
-const createExpense = async (req, res) => {
+const createExpense = async (req: Request, res: Response): Promise<void> => {
   try {
     const eventId = req.body.eventId;
 
     // Check description and notes length if provided
     const validationError = validateFieldLengths(req.body);
-    if (validationError) return res.status(400).json(validationError);
+    if (validationError) {
+      res.status(400).json(validationError);
+      return;
+    }
 
     // Fetch event, budget status, and vendor all in parallel
     const [event, budgetStatus, vendorCheck] = await Promise.all([
@@ -61,39 +76,43 @@ const createExpense = async (req, res) => {
     ]);
     // 3️⃣ Event validation
     if (!event) {
-      return res.status(404).json({
+      res.status(404).json({
         error: "EventNotFound",
         message: "Event not found or does not belong to your organization",
       });
+      return;
     }
 
     if (event.isArchived) {
-      return res.status(403).json({
+      res.status(403).json({
         error: "EventArchived",
         message:
           "Cannot add expenses for archived events. Please restore the event first.",
       });
+      return;
     }
 
     // budget validation
     if (budgetStatus.totalBudget === 0) {
-      return res.status(404).json({
+      res.status(404).json({
         error: "BudgetNotFound",
         message: "Event budget not found",
       });
+      return;
     }
 
     // Vendor validation
     if (req.body.vendor && !vendorCheck) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "InvalidVendor",
         message: "Selected vendor does not exist or has been removed",
       });
+      return;
     }
 
     // control: expense must be less than remaining budget
     if (req.body.amount > budgetStatus.remainingBudget) {
-      return res.status(400).json({
+      res.status(400).json({
         message: `Expense exceeds remaining budget ($${budgetStatus.remainingBudget.toFixed(
           2,
         )} available). Top up your overall budget with $${(
@@ -102,6 +121,7 @@ const createExpense = async (req, res) => {
         remainingBudget: budgetStatus.remainingBudget,
         attemptedAmount: req.body.amount,
       });
+      return;
     }
 
     // Add createdBy from authenticated user
@@ -151,33 +171,39 @@ const createExpense = async (req, res) => {
         req.user.organization,
       ),
     });
-  } catch (err) {
-    if (err.name === "ValidationError") {
-      return res.status(400).json({
-        message: Object.values(err.errors)
-          .map((e) => e.message)
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "ValidationError") {
+      res.status(400).json({
+        message: Object.values((err as any).errors)
+          .map((e: any) => e.message)
           .join(", "),
       });
+      return;
     }
-    res.status(500).json({ message: err.message });
+    const message = err instanceof Error ? err.message : "An error occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // Get all expenses
-const getAllExpenses = async (req, res) => {
+const getAllExpenses = async (req: Request, res: Response): Promise<void> => {
   try {
     const expenses = await Expense.find({
       organizationId: req.user.organization,
     });
 
     res.json(expenses);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Get all expenses for an event
-const getExpensesByEventId = async (req, res) => {
+const getExpensesByEventId = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const expenses = await Expense.find({
       eventId: req.params.eventId,
@@ -198,7 +224,7 @@ const getExpensesByEventId = async (req, res) => {
       expenses: expenses || [],
       budgetStatus,
     });
-  } catch (err) {
+  } catch {
     // Return empty state instead of error
     res.json({
       expenses: [],
@@ -213,7 +239,7 @@ const getExpensesByEventId = async (req, res) => {
 };
 
 // Get expense by ID
-const getExpenseById = async (req, res) => {
+const getExpenseById = async (req: Request, res: Response): Promise<void> => {
   try {
     const expense = await Expense.findOne({
       _id: req.params.id,
@@ -224,17 +250,21 @@ const getExpenseById = async (req, res) => {
       .populate("updatedBy", "firstName lastName email isActive");
 
     if (!expense) {
-      return res.status(404).json({ message: "Expense not found" });
+      {
+        res.status(404).json({ message: "Expense not found" });
+        return;
+      }
     }
 
     res.json(expense);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Update expense
-const updateExpense = async (req, res) => {
+const updateExpense = async (req: Request, res: Response): Promise<void> => {
   try {
     const existingExpense = req.targetExpense;
 
@@ -244,11 +274,12 @@ const updateExpense = async (req, res) => {
       existingExpense.createdBy.toString() === req.user._id.toString();
 
     if (isPlanner && !isOwner) {
-      return res.status(403).json({
+      res.status(403).json({
         error: "Forbidden",
         code: "INSUFFICIENT_PERMISSION",
         message: "Planners can only edit expenses that they created.",
       });
+      return;
     }
 
     // cache event id
@@ -256,7 +287,10 @@ const updateExpense = async (req, res) => {
 
     // Check description and notes length if provided in update
     const validationError = validateFieldLengths(req.body);
-    if (validationError) return res.status(400).json(validationError);
+    if (validationError) {
+      res.status(400).json(validationError);
+      return;
+    }
 
     // Fetch event, budget, and budget status all in parallel
     const [event, budget, budgetStatusBefore] = await Promise.all([
@@ -266,26 +300,29 @@ const updateExpense = async (req, res) => {
     ]);
 
     if (!event) {
-      return res.status(404).json({
+      res.status(404).json({
         error: "EventNotFound",
         message: "Associated event not found",
       });
+      return;
     }
     if (event.isArchived) {
-      return res.status(403).json({
+      res.status(403).json({
         error: "EventArchived",
         message:
           "Cannot update expenses for archived events. Please restore the event first.",
       });
+      return;
     }
 
     // PREVENT EDITING OF PAID EXPENSES
     if (existingExpense.paymentStatus === "paid") {
-      return res.status(400).json({
+      res.status(400).json({
         error: "CannotEditPaidExpense",
         message: "Paid expenses cannot be edited",
         resolution: "If changes are needed, delete and recreate the expense",
       });
+      return;
     }
 
     // 4️⃣ Budget math (only if budget exists)
@@ -295,12 +332,13 @@ const updateExpense = async (req, res) => {
 
     if (budget && existingExpense.paymentStatus === "pending") {
       if (budget.remainingBudget < delta) {
-        return res.status(400).json({
+        res.status(400).json({
           message: `Update would exceed remaining budget by $${delta.toFixed(
             2,
           )}. Please work within the available budget or increase it.`,
           remainingBudget: budget.remainingBudget,
         });
+        return;
       }
     }
 
@@ -316,10 +354,11 @@ const updateExpense = async (req, res) => {
       });
 
       if (!vendor) {
-        return res.status(400).json({
+        res.status(400).json({
           error: "InvalidVendor",
           message: "Selected vendor does not exist or has been removed",
         });
+        return;
       }
     }
 
@@ -380,19 +419,21 @@ const updateExpense = async (req, res) => {
       budgetStatus: budgetStatusAfter,
     });
   } catch (err) {
-    if (err.name === "ValidationError") {
-      return res.status(400).json({
-        message: Object.values(err.errors)
-          .map((e) => e.message)
+    if (err instanceof Error && err.name === "ValidationError") {
+      res.status(400).json({
+        message: Object.values((err as any).errors)
+          .map((e: any) => e.message)
           .join(", "),
       });
+      return;
     }
-    res.status(500).json({ message: err.message });
+    const message = err instanceof Error ? err.message : "An error occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // Delete expense
-const deleteExpense = async (req, res) => {
+const deleteExpense = async (req: Request, res: Response): Promise<void> => {
   try {
     const expense = req.targetExpense;
 
@@ -409,27 +450,31 @@ const deleteExpense = async (req, res) => {
     ]);
 
     if (!event) {
-      return res.status(404).json({ message: "Associated event not found" });
+      res.status(404).json({ message: "Associated event not found" });
+      return;
     }
 
     // 🚫 PREVENT DELETING EXPENSES FOR ARCHIVED EVENTS
     if (event.isArchived) {
-      return res.status(403).json({
+      res.status(403).json({
         error: "EventArchived",
         message:
           "Cannot delete expenses for archived events. Please restore the event first.",
       });
+      return;
     }
 
     if (event.status === "Completed") {
-      return res.status(400).json({
+      res.status(400).json({
         message: "Cannot delete expenses for completed events",
         resolution: "Please reopen the event if changes are needed",
       });
+      return;
     }
 
     if (!budget) {
-      return res.status(404).json({ message: "Associated budget not found" });
+      res.status(404).json({ message: "Associated budget not found" });
+      return;
     }
 
     // 4️⃣ Budget snapshot BEFORE mutation
@@ -491,17 +536,21 @@ const deleteExpense = async (req, res) => {
         },
       },
     });
-  } catch (err) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred.";
     res.status(500).json({
       message: "Failed to delete expense",
-      systemMessage: err.message,
+      systemMessage: message,
       errorCode: "EXPENSE_DELETION_FAILED",
     });
   }
 };
 
 // Get expenses summary by category
-const getExpensesSummary = async (req, res) => {
+const getExpensesSummary = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const summary = await Expense.aggregate([
       {
@@ -529,21 +578,25 @@ const getExpensesSummary = async (req, res) => {
         req.user.organization,
       ),
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // get budget status for all events
-const getBudgetStatusForAllEvents = async (req, res) => {
+const getBudgetStatusForAllEvents = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const budgets = await Budget.find({
       organizationId: req.user.organization,
     }).populate("eventId", "name");
 
     const response = budgets.map((b) => ({
-      eventId: b.eventId._id,
-      eventName: b.eventId.name,
+      eventId: (b.eventId as any)._id,
+      eventName: (b.eventId as any).name,
       budgetStatus: {
         totalBudget: b.totalBudget,
         spentAmount: b.spentAmount,
@@ -553,16 +606,19 @@ const getBudgetStatusForAllEvents = async (req, res) => {
     }));
 
     res.json(response);
-  } catch (err) {
-    res.status(500).json({
-      message: "Failed to get budget status",
-      error: err.message,
-    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res
+      .status(500)
+      .json({ message: "Failed to get budget status", error: message });
   }
 };
 
 // Get expense audit logs
-const getExpenseAuditLogs = async (req, res) => {
+const getExpenseAuditLogs = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const {
       eventId,
@@ -572,12 +628,12 @@ const getExpenseAuditLogs = async (req, res) => {
       limit = 100,
       userId,
     } = req.query;
-    let query = {
+    let query: Record<string, any> = {
       organizationId: req.user.organization,
     };
 
     // FIXED: Proper event filtering
-    if (eventId && mongoose.Types.ObjectId.isValid(eventId)) {
+    if (eventId && mongoose.Types.ObjectId.isValid(eventId as string)) {
       query.eventId = eventId;
     }
 
@@ -586,8 +642,8 @@ const getExpenseAuditLogs = async (req, res) => {
 
     if (startDate || endDate) {
       query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
+      if (startDate) query.createdAt.$gte = new Date(startDate as string);
+      if (endDate) query.createdAt.$lte = new Date(endDate as string);
     }
 
     const logs = await ExpenseAuditLog.find(query)
@@ -595,7 +651,7 @@ const getExpenseAuditLogs = async (req, res) => {
       .populate("performedBy", "firstName lastName email role")
       .populate("expenseId", "description amount category paymentStatus")
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit));
+      .limit(parseInt(limit as string));
 
     const populatedLogs = await Promise.all(
       logs.map(async (log) => {
@@ -603,13 +659,13 @@ const getExpenseAuditLogs = async (req, res) => {
         const logObj = log.toObject();
 
         // Determine which data to use
-        let expenseData = {};
+        let expenseData: Record<string, any> = {};
         if (log.actionType === "DELETE" && log.deletedData) {
-          expenseData = { ...log.deletedData };
+          expenseData = { ...(log.deletedData as object) };
         } else if (log.newData) {
-          expenseData = { ...log.newData };
+          expenseData = { ...(log.newData as object) };
         } else if (log.previousData) {
-          expenseData = { ...log.previousData };
+          expenseData = { ...(log.previousData as object) };
         }
 
         expenseData.createdBy = expenseData.createdBySnapshot;
@@ -667,8 +723,8 @@ const getExpenseAuditLogs = async (req, res) => {
           createdBySnapshot: log.expenseData?.createdBySnapshot,
         },
         event: {
-          _id: log.eventId?._id || log.eventId,
-          name: log.eventId?.name || "Unknown Event",
+          _id: (log.eventId as unknown as IEvent)?._id || log.eventId,
+          name: (log.eventId as unknown as IEvent)?.name || "Unknown Event",
         },
         deletedBy:
           log.actionType === "DELETE" ? log.performedBySnapshot : undefined,
@@ -705,15 +761,18 @@ const getExpenseAuditLogs = async (req, res) => {
 };
 
 // 🔴 deleted events expense logs
-const getDeletedEventExpenseLogs = async (req, res) => {
+const getDeletedEventExpenseLogs = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { eventId } = req.query;
-    let query = {
+    let query: Record<string, any> = {
       organizationId: req.user.organization,
       actionType: "EVENT_DELETE_CASCADE",
     };
 
-    if (eventId && mongoose.Types.ObjectId.isValid(eventId)) {
+    if (eventId && mongoose.Types.ObjectId.isValid(eventId as string)) {
       query.eventId = eventId;
     }
 
@@ -727,10 +786,10 @@ const getDeletedEventExpenseLogs = async (req, res) => {
       })
       .lean()
       .sort({ createdAt: -1 })
-      .limit(parseInt(req.query.limit || 100));
+      .limit(parseInt((req.query.limit as string) || "100"));
 
     const formattedLogs = logs.map((log) => {
-      const expenseData = log.newData || {};
+      const expenseData = (log.newData as Record<string, any>) || {};
 
       return {
         _id: log._id,
@@ -758,7 +817,10 @@ const getDeletedEventExpenseLogs = async (req, res) => {
         },
         event: {
           _id: log.eventId?._id || log.eventId,
-          name: log.eventId?.name || extractEventName(log) || "Unknown Event",
+          name:
+            (log.eventId as any)?.name ||
+            extractEventName(log) ||
+            "Unknown Event",
         },
         // ✅ ADD THIS - Make it match the regular audit log structure
         deletedBy: log.performedBySnapshot, // For AuditLogsOverview component
@@ -777,7 +839,8 @@ const getDeletedEventExpenseLogs = async (req, res) => {
 
     // Group by event for frontend
     const groupedByEvent = formattedLogs.reduce((acc, log) => {
-      const eventId = log.eventId?._id || log.eventId;
+      const eventId =
+        (log.eventId as any)?._id.toString() || String(log.eventId);
       if (!acc[eventId]) {
         acc[eventId] = {
           eventId,
@@ -798,22 +861,22 @@ const getDeletedEventExpenseLogs = async (req, res) => {
       groupedByEvent: Object.values(groupedByEvent),
       count: formattedLogs.length,
     });
-  } catch (err) {
-    console.error("❌ Deleted event audit log error:", err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
     res.status(500).json({
       message: "Failed to fetch deleted event expense logs",
-      error: err.message,
+      error: message,
     });
   }
 };
 
 // Helper function to extract event name from description
-const extractEventName = (log) => {
+const extractEventName = (log: Record<string, any>): string | null => {
   const match = log.description?.match(/event "([^"]+)"/);
   return match ? match[1] : null;
 };
 
-module.exports = {
+export {
   createExpense,
   getExpensesByEventId,
   getExpenseById,
