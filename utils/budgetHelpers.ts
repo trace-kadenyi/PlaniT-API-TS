@@ -1,7 +1,22 @@
-const Budget = require("../models/BudgetSchema");
-const Expense = require("../models/ExpenseSchema");
+import { Types } from "mongoose";
 
-const getBudgetStatus = async (eventId, organizationId) => {
+import Budget from "../models/BudgetSchema";
+import Expense from "../models/ExpenseSchema";
+
+interface BudgetStatus {
+  totalBudget: number;
+  spentAmount?: number;
+  reservedAmount?: number;
+  totalExpenses: number;
+  remainingBudget: number;
+  deletedPaidTotal?: number;
+  budgetExists: boolean;
+}
+
+export const getBudgetStatus = async (
+  eventId: Types.ObjectId | string,
+  organizationId: Types.ObjectId | string,
+): Promise<BudgetStatus> => {
   const budget = await Budget.findOne({ eventId, organizationId });
 
   if (!budget) {
@@ -31,5 +46,3 @@ const getBudgetStatus = async (eventId, organizationId) => {
     budgetExists: true,
   };
 };
-
-module.exports = { getBudgetStatus };
