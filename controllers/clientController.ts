@@ -1,34 +1,37 @@
-const mongoose = require("mongoose");
+import { Request, Response } from "express";
+import mongoose from "mongoose";
 
-const Client = require("../models/ClientSchema");
-const Event = require("../models/EventSchema");
+import Client from "../models/ClientSchema";
+import Event from "../models/EventSchema";
 
 const MAX_NOTES = 200;
 const MAX_PREFERENCES = 150;
 
 // Create new client
-const createClient = async (req, res) => {
+const createClient = async (req: Request, res: Response): Promise<void> => {
   try {
     // Check notes length if provided
     if (req.body.notes && req.body.notes.length > MAX_NOTES) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "ValidationError",
         message: `Client notes cannot exceed ${MAX_NOTES} characters`,
         field: "notes",
         maxLength: MAX_NOTES,
         currentLength: req.body.notes.length,
       });
+      return;
     }
 
     // Check prereferences length if provided
     if (req.body.preferences && req.body.preferences.length > MAX_PREFERENCES) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "ValidationError",
         message: `Client preferences cannot exceed ${MAX_PREFERENCES} characters`,
         field: "preferences",
         maxLength: MAX_PREFERENCES,
         currentLength: req.body.preferences.length,
       });
+      return;
     }
 
     // client data
@@ -40,20 +43,20 @@ const createClient = async (req, res) => {
 
     const client = await Client.create(clientData);
     res.status(201).json(client);
-  } catch (err) {
-    console.error("Create client error:", err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
     res.status(400).json({
-      error: err.name,
-      message: err.message,
-      details: err.errors,
+      error: (err as any)?.name,
+      message,
+      details: (err as any)?.errors,
     });
   }
 };
 
 // Get all active clients
-const getAllClients = async (req, res) => {
+const getAllClients = async (req: Request, res: Response): Promise<void> => {
   try {
-    const filter = {
+    const filter: Record<string, unknown> = {
       organizationId: req.user.organization,
       isDeleted: false,
     };
@@ -65,13 +68,17 @@ const getAllClients = async (req, res) => {
 
     const clients = await Client.find(filter).sort({ createdAt: -1 });
     res.json(clients);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ error: message });
   }
 };
 
 // Get a single client and their events
-const getClientWithEvents = async (req, res) => {
+const getClientWithEvents = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const client = await Client.findOne({
       _id: req.params.id,
@@ -79,15 +86,17 @@ const getClientWithEvents = async (req, res) => {
     });
 
     if (!client) {
-      return res.status(404).json({ error: "Client not found" });
+      res.status(404).json({ error: "Client not found" });
+      return;
     }
 
     // Block viewers from accessing archived clients directly
     if (client.isArchived && req.user.role === "viewer") {
-      return res.status(403).json({
+      res.status(403).json({
         error: "Forbidden",
         message: "You do not have permission to view archived clients.",
       });
+      return;
     }
 
     const events = await Event.find({
@@ -101,34 +110,37 @@ const getClientWithEvents = async (req, res) => {
     }
 
     res.json({ client: clientData, events });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ error: message });
   }
 };
 
 // Update a client
-const updateClient = async (req, res) => {
+const updateClient = async (req: Request, res: Response): Promise<void> => {
   try {
     // Check notes length if provided
     if (req.body.notes && req.body.notes.length > MAX_NOTES) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "ValidationError",
         message: `Client notes cannot exceed ${MAX_NOTES} characters`,
         field: "notes",
         maxLength: MAX_NOTES,
         currentLength: req.body.notes.length,
       });
+      return;
     }
 
     // Check prereferences length if provided
     if (req.body.preferences && req.body.preferences.length > MAX_PREFERENCES) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "ValidationError",
         message: `Client preferences cannot exceed ${MAX_PREFERENCES} characters`,
         field: "preferences",
         maxLength: MAX_PREFERENCES,
         currentLength: req.body.preferences.length,
       });
+      return;
     }
 
     const client = await Client.findOne({
@@ -138,13 +150,15 @@ const updateClient = async (req, res) => {
     });
 
     if (!client) {
-      return res.status(404).json({ error: "Client not found" });
+      res.status(404).json({ error: "Client not found" });
+      return;
     }
 
     if (client.isArchived) {
-      return res.status(409).json({
+      res.status(409).json({
         message: "Cannot update an archived client. Unarchive it first.",
       });
+      return;
     }
 
     // Apply updates
@@ -152,13 +166,14 @@ const updateClient = async (req, res) => {
     await client.save();
 
     res.json(client);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(400).json({ error: message });
   }
 };
 
 // Archive a client
-const archiveClient = async (req, res) => {
+const archiveClient = async (req: Request, res: Response): Promise<void> => {
   try {
     const client = await Client.findOne({
       _id: req.params.id,
@@ -167,13 +182,13 @@ const archiveClient = async (req, res) => {
     });
 
     if (!client) {
-      return res
-        .status(404)
-        .json({ error: "Client not found or already deleted" });
+      res.status(404).json({ error: "Client not found or already deleted" });
+      return;
     }
 
     if (client.isArchived) {
-      return res.status(409).json({ message: "Client is already archived." });
+      res.status(409).json({ message: "Client is already archived." });
+      return;
     }
 
     client.isArchived = true;
@@ -184,13 +199,15 @@ const archiveClient = async (req, res) => {
       message: "Client archived successfully",
       client,
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred";
+    res.status(500).json({ error: message });
   }
 };
 
 // Unarchive archived clients
-const restoreClient = async (req, res) => {
+const restoreClient = async (req: Request, res: Response): Promise<void> => {
   try {
     const client = await Client.findOne({
       _id: req.params.id,
@@ -199,13 +216,15 @@ const restoreClient = async (req, res) => {
     });
 
     if (!client) {
-      return res
+      res
         .status(404)
         .json({ error: "Client not found or permanently deleted" });
+      return;
     }
 
     if (!client.isArchived) {
-      return res.status(409).json({ message: "Client is already active." });
+      res.status(409).json({ message: "Client is already active." });
+      return;
     }
 
     client.isArchived = false;
@@ -216,18 +235,21 @@ const restoreClient = async (req, res) => {
       message: "Client restored successfully",
       client,
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred";
+    res.status(500).json({ error: message });
   }
 };
 
 // HANDLE CLIENT DELETE
 // Permanent soft delete only
-const deleteClient = async (req, res) => {
+const deleteClient = async (req: Request, res: Response): Promise<void> => {
   try {
     // Validate that the ID is a valid ObjectId
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: "Invalid client ID" });
+    if (!mongoose.Types.ObjectId.isValid(req.params.id as string)) {
+      res.status(400).json({ error: "Invalid client ID" });
+      return;
     }
 
     const client = await Client.findOne({
@@ -236,7 +258,8 @@ const deleteClient = async (req, res) => {
     });
 
     if (!client) {
-      return res.status(404).json({ error: "Client not found" });
+      res.status(404).json({ error: "Client not found" });
+      return;
     }
 
     // Check if client has any associated events
@@ -251,7 +274,7 @@ const deleteClient = async (req, res) => {
       client.deletedAt = new Date();
       await client.save();
 
-      return res.json({
+      res.json({
         message:
           "Client permanently deleted and removed from active records (records preserved for existing events)",
         client: {
@@ -263,24 +286,26 @@ const deleteClient = async (req, res) => {
           eventCount,
         },
       });
+      return;
     }
     // Client has NO events - HARD DELETE
     await client.deleteOne();
 
-    return res.json({
+    res.json({
       message: "Client permanently deleted (no associated events)",
       deletedClient: client,
       hasEvents: false,
       eventCount: 0,
     });
-  } catch (err) {
-    console.error("Delete client error:", err);
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred";
+    res.status(500).json({ error: message });
   }
 };
 
 // Delete all clients
-const deleteAllClients = async (req, res) => {
+const deleteAllClients = async (req: Request, res: Response): Promise<void> => {
   try {
     const clients = await Client.find({
       organizationId: req.user.organization,
@@ -319,13 +344,13 @@ const deleteAllClients = async (req, res) => {
         deleteCount,
       },
     });
-  } catch (err) {
-    console.error("Delete all clients error:", err);
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ error: message });
   }
 };
 
-module.exports = {
+export {
   createClient,
   getAllClients,
   getClientWithEvents,
