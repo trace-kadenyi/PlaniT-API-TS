@@ -1,4 +1,7 @@
+/// <reference path="./types/express/index.d.ts" />
+
 import express, { Request, Response, NextFunction } from "express";
+
 const app = express();
 import cors from "cors";
 import cookieParser from "cookie-parser";
