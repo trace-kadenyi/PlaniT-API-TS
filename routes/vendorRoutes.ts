@@ -13,7 +13,7 @@ import {
 import { authorize } from "../middleware/authmiddleware";
 import { PERMISSIONS, RESOURCES } from "../services/permissionService";
 
-import authController from "../controllers/authController";
+import * as authController from "../controllers/authController";
 
 const router: Router = express.Router();
 

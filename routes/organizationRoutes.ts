@@ -4,7 +4,7 @@ import {
   getOrganizationDetails,
   updateOrganization,
 } from "../controllers/organizationController";
-import authController from "../controllers/authController";
+import * as authController from "../controllers/authController";
 import { authorize } from "../middleware/authmiddleware";
 import { PERMISSIONS, RESOURCES } from "../services/permissionService";
 
