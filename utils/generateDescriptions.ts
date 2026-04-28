@@ -1,4 +1,20 @@
-export function generateDescription(changes, targetUser, updater, isSelf) {
+interface Change {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+interface UserSnapshot {
+  firstName: string;
+  lastName: string;
+}
+
+export function generateDescription(
+  changes: Change[],
+  targetUser: UserSnapshot,
+  updater: UserSnapshot,
+  isSelf: boolean,
+): string {
   const action = isSelf
     ? "updated their profile"
     : `${updater.firstName} ${updater.lastName} updated ${targetUser.firstName}'s profile`;
