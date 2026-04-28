@@ -1,12 +1,14 @@
-const Task = require("../models/TaskSchema");
-const Event = require("../models/EventSchema");
-const User = require("../models/UserSchema");
+import { Request, Response } from "express";
+
+import Task from "../models/TaskSchema";
+import Event from "../models/EventSchema";
+import User from "../models/UserSchema";
 
 const maxChars = 150;
 const maxNameChars = 50;
 
 // Get all tasks
-const getAllTasks = async (req, res) => {
+const getAllTasks = async (req: Request, res: Response): Promise<void> => {
   try {
     // Get all users in the same organization
     const organizationUsers = await User.find({
@@ -16,7 +18,7 @@ const getAllTasks = async (req, res) => {
     const organizationUserIds = organizationUsers.map((user) => user._id);
 
     // Base filter - only tasks created by users in same organization
-    const filter = {
+    const filter: Record<string, unknown> = {
       createdBy: { $in: organizationUserIds },
     };
 
@@ -38,47 +40,52 @@ const getAllTasks = async (req, res) => {
     // Transform tasks to include eventName at top level
     const tasksWithEventName = tasks.map((task) => ({
       ...task.toObject(),
-      eventName: task.eventId?.name || "Unassigned", // Add eventName field
+      eventName: (task.eventId as any)?.name || "Unassigned", // Add eventName field
     }));
 
     res.json(tasksWithEventName);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Create a new task
-const createTask = async (req, res) => {
+const createTask = async (req: Request, res: Response): Promise<void> => {
   try {
     // name word limit
     const taskName = req.body.title || "";
     if (taskName.length > maxNameChars) {
-      return res.status(400).json({
+      res.status(400).json({
         message: `Task name cannot exceed ${maxNameChars} characters.`,
       });
+      return;
     }
 
     // description word limit
     const description = req.body.description || "";
     if (description.length > maxChars) {
-      return res
+      res
         .status(400)
         .json({ message: `Description cannot exceed ${maxChars} characters.` });
+      return;
     }
 
     // Validate event exists and get event date
     const event = await Event.findById(req.body.eventId);
     if (!event) {
-      return res.status(404).json({ message: "Associated event not found" });
+      res.status(404).json({ message: "Associated event not found" });
+      return;
     }
 
     // 🚫 PREVENT CREATING TASKS FOR ARCHIVED EVENTS
     if (event.isArchived) {
-      return res.status(403).json({
+      res.status(403).json({
         error: "EventArchived",
         message:
           "Cannot create tasks for archived events. Please restore the event first.",
       });
+      return;
     }
 
     // verify user has access to this event (event must be in same org)
@@ -94,9 +101,10 @@ const createTask = async (req, res) => {
     });
 
     if (!eventCreatorInOrg) {
-      return res.status(403).json({
+      res.status(403).json({
         message: "Access denied to this event",
       });
+      return;
     }
 
     // Convert dates to consistent format for comparison
@@ -108,23 +116,25 @@ const createTask = async (req, res) => {
     eventDate.setHours(0, 0, 0, 0);
 
     if (taskDeadline > eventDate) {
-      return res.status(400).json({
+      res.status(400).json({
         message: "Task deadline cannot be after the event date",
         validation: {
           field: "deadline",
           message: "Task deadline must be before the event date",
         },
       });
+      return;
     }
 
     if (taskDeadline < new Date()) {
-      return res.status(400).json({
+      res.status(400).json({
         message: "Task deadline cannot be in the past",
         validation: {
           field: "deadline",
           message: "Task deadline must be a date in the future",
         },
       });
+      return;
     }
 
     // Only create task if validation passes
@@ -142,22 +152,27 @@ const createTask = async (req, res) => {
       .populate("createdBy", "firstName lastName email");
 
     res.status(201).json(populatedTask);
-  } catch (err) {
-    if (err.name === "ValidationError") {
-      const messages = Object.values(err.errors).map((e) => e.message);
-      return res.status(400).json({
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "ValidationError") {
+      const messages = Object.values((err as any).errors).map(
+        (e: any) => e.message,
+      );
+      res.status(400).json({
         message: messages.join(", "),
-        validationErrors: err.errors,
+        validationErrors: (err as any).errors,
       });
+      return;
     }
 
+    const message = err instanceof Error ? err.message : "An error occurred.";
+
     res.status(400).json({
-      message: err.message || "Something went wrong while creating the task.",
+      message,
     });
   }
 };
 // Update a task
-const updateTask = async (req, res) => {
+const updateTask = async (req: Request, res: Response): Promise<void> => {
   try {
     // Get all users in the same organization
     const organizationUsers = await User.find({
@@ -172,9 +187,10 @@ const updateTask = async (req, res) => {
     });
 
     if (!existingTask) {
-      return res.status(404).json({
+      res.status(404).json({
         message: "Task not found or access denied",
       });
+      return;
     }
 
     // 🚫 CHECK IF ASSOCIATED EVENT IS ARCHIVED
@@ -185,28 +201,31 @@ const updateTask = async (req, res) => {
       }).select("isArchived");
 
       if (event && event.isArchived) {
-        return res.status(403).json({
+        res.status(403).json({
           error: "EventArchived",
           message:
             "Cannot update tasks for archived events. Please restore the event first.",
         });
+        return;
       }
     }
 
     // name word limit
     const taskName = req.body.title || "";
     if (taskName.length > maxNameChars) {
-      return res.status(400).json({
+      res.status(400).json({
         message: `Task name cannot exceed ${maxNameChars} characters.`,
       });
+      return;
     }
 
     // description word limit
     const description = req.body.description || "";
     if (description.length > maxChars) {
-      return res
+      res
         .status(400)
         .json({ message: `Description cannot exceed ${maxChars} characters.` });
+      return;
     }
 
     // Check if task deadline is being updated
@@ -214,12 +233,14 @@ const updateTask = async (req, res) => {
       // Get the current task to find the associated event
       const task = await Task.findById(req.params.id);
       if (!task) {
-        return res.status(404).json({ message: "Task not found" });
+        res.status(404).json({ message: "Task not found" });
+        return;
       }
 
       const event = await Event.findById(task.eventId);
       if (!event) {
-        return res.status(404).json({ message: "Associated event not found" });
+        res.status(404).json({ message: "Associated event not found" });
+        return;
       }
 
       // Convert dates to consistent format for comparison
@@ -231,23 +252,25 @@ const updateTask = async (req, res) => {
       eventDate.setHours(0, 0, 0, 0);
 
       if (newDeadline > eventDate) {
-        return res.status(400).json({
+        res.status(400).json({
           message: "Task deadline cannot be after the event date",
           validation: {
             field: "deadline",
             message: "Task deadline must be before the event date",
           },
         });
+        return;
       }
 
       if (newDeadline < new Date()) {
-        return res.status(400).json({
+        res.status(400).json({
           message: "Task deadline cannot be in the past",
           validation: {
             field: "deadline",
             message: "Task deadline must be a date in the future",
           },
         });
+        return;
       }
     }
 
@@ -269,17 +292,19 @@ const updateTask = async (req, res) => {
       .populate("updatedBy", "firstName lastName email isActive");
 
     if (!updatedTask) {
-      return res.status(404).json({ message: "Task not found" });
+      res.status(404).json({ message: "Task not found" });
+      return;
     }
 
     res.json(updatedTask);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred.";
+    res.status(400).json({ message });
   }
 };
 
 // Get a single task by ID
-const getTaskById = async (req, res) => {
+const getTaskById = async (req: Request, res: Response): Promise<void> => {
   try {
     // Get all users in the same organization
     const organizationUsers = await User.find({
@@ -298,25 +323,30 @@ const getTaskById = async (req, res) => {
       .populate("updatedBy", "firstName lastName email isActive");
 
     if (!task) {
-      return res.status(404).json({ message: "Task not found" });
+      res.status(404).json({ message: "Task not found" });
+      return;
     }
     res.json(task);
-  } catch (err) {
+  } catch (err: unknown) {
     // Handle Mongoose validation errors
-    if (err.name === "ValidationError") {
-      const messages = Object.values(err.errors).map((e) => e.message);
-      return res.status(400).json({ message: messages.join(", ") });
+    if (err instanceof Error && err.name === "ValidationError") {
+      const messages = Object.values((err as any).errors).map(
+        (e: any) => e.message,
+      );
+      res.status(400).json({ message: messages.join(", ") });
+      return;
     }
 
     // General error fallback
+    const message = err instanceof Error ? err.message : "An error occurred";
     res.status(400).json({
-      message: err.message || "Something went wrong while updating the task.",
+      message,
     });
   }
 };
 
 // Delete a task
-const deleteTask = async (req, res) => {
+const deleteTask = async (req: Request, res: Response): Promise<void> => {
   try {
     // Get all users in the same organization
     const organizationUsers = await User.find({
@@ -331,9 +361,10 @@ const deleteTask = async (req, res) => {
     });
 
     if (!existingTask) {
-      return res.status(404).json({
+      res.status(404).json({
         message: "Task not found or access denied",
       });
+      return;
     }
 
     // 🚫 CHECK IF ASSOCIATED EVENT IS ARCHIVED
@@ -344,28 +375,25 @@ const deleteTask = async (req, res) => {
       }).select("isArchived");
 
       if (event && event.isArchived) {
-        return res.status(403).json({
+        res.status(403).json({
           error: "EventArchived",
           message:
             "Cannot delete tasks for archived events. Please restore the event first.",
         });
+        return;
       }
     }
 
     const deletedTask = await Task.findByIdAndDelete(req.params.id);
     if (!deletedTask) {
-      return res.status(404).json({ message: "Task not found" });
+      res.status(404).json({ message: "Task not found" });
+      return;
     }
     res.json({ message: "Task deleted successfully" });
-  } catch (err) {
-    res.status(400).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(400).json({ message });
   }
 };
 
-module.exports = {
-  getAllTasks,
-  createTask,
-  updateTask,
-  getTaskById,
-  deleteTask,
-};
+export { getAllTasks, createTask, updateTask, getTaskById, deleteTask };
