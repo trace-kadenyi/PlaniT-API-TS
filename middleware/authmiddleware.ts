@@ -9,6 +9,7 @@ import {
 import User from "../models/UserSchema";
 import Expense from "../models/ExpenseSchema";
 import Event from "../models/EventSchema";
+import { IUser } from "../types/models";
 
 export const authorize = (permission: string, resource: string) => {
   return async (
@@ -118,20 +119,19 @@ export const authorize = (permission: string, resource: string) => {
         }
       }
 
-      // target user role
+      let permissionTarget: IUser | { role: string } | null = null;
+
       if (resource === RESOURCES.USER && req.method === "POST") {
-        // Create a minimal target with just the role
-        targetUser = { role: req.body.role };
+        permissionTarget = { role: req.body.role };
+      } else {
+        permissionTarget = targetUser;
       }
 
-      // ===============================
-      // 5️⃣ General permission check
-      // ===============================
       const hasPermission = checkPermission(
         req.user,
         permission,
         resource,
-        targetUser || expense || event,
+        permissionTarget || expense || event,
       );
 
       if (!hasPermission) {
