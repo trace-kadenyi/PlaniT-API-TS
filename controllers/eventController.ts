@@ -1,26 +1,29 @@
-const mongoose = require("mongoose");
+import { Request, Response } from "express";
+import mongoose from "mongoose";
 
-const Event = require("../models/EventSchema");
-const Task = require("../models/TaskSchema");
-const Budget = require("../models/BudgetSchema");
-const Expense = require("../models/ExpenseSchema");
-const User = require("../models/UserSchema");
-const Client = require("../models/ClientSchema");
-const supabaseAdmin = require("../utils/supabaseAdmin");
-const { logExpenseAction } = require("../utils/auditHelpers");
+import Event from "../models/EventSchema";
+import Task from "../models/TaskSchema";
+import Budget from "../models/BudgetSchema";
+import Expense from "../models/ExpenseSchema";
+import User from "../models/UserSchema";
+import Client from "../models/ClientSchema";
+import supabaseAdmin from "../utils/supabaseAdmin";
+import { logExpenseAction } from "../utils/auditHelpers";
 
 const maxChars = 300;
 const maxNameChars = 70;
 const maxSummaryChars = 200;
 
-const validateEventFieldLengths = (data) => {
-  if ((data.name || "").length > maxNameChars) {
+const validateEventFieldLengths = (
+  data: Record<string, unknown>,
+): { message: string } | null => {
+  if (((data.name as string) || "").length > maxNameChars) {
     return { message: `Event name cannot exceed ${maxNameChars} characters.` };
   }
-  if ((data.description || "").length > maxChars) {
+  if (((data.description as string) || "").length > maxChars) {
     return { message: `Description cannot exceed ${maxChars} characters.` };
   }
-  if ((data.summary || "").length > maxSummaryChars) {
+  if (((data.summary as string) || "").length > maxSummaryChars) {
     return {
       message: `Event summary cannot exceed ${maxSummaryChars} characters.`,
     };
@@ -29,9 +32,9 @@ const validateEventFieldLengths = (data) => {
 };
 
 // Date normalization middleware
-const normalizeEventDate = (date) => {
+const normalizeEventDate = (date: unknown): Date | null => {
   if (!date) return null;
-  const d = new Date(date);
+  const d = new Date(date as string);
   return new Date(
     Date.UTC(
       d.getUTCFullYear(),
@@ -44,7 +47,7 @@ const normalizeEventDate = (date) => {
 };
 
 // Create a new event
-const createEvent = async (req, res) => {
+const createEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     // If assigning a client, check if that client exists and is not deleted
     if (req.body.client) {
@@ -56,10 +59,11 @@ const createEvent = async (req, res) => {
       });
 
       if (!client) {
-        return res.status(400).json({
+        res.status(400).json({
           message:
             "Cannot assign a deleted, archived or non-existent client to an event",
         });
+        return;
       }
     }
 
@@ -68,9 +72,10 @@ const createEvent = async (req, res) => {
 
     // Check if event date is in the past
     if (eventDate !== null && eventDate < new Date()) {
-      return res.status(400).json({
+      res.status(400).json({
         message: "Event date cannot be in the past",
       });
+      return;
     }
 
     const eventData = {
@@ -82,7 +87,10 @@ const createEvent = async (req, res) => {
 
     // field lengths
     const validationError = validateEventFieldLengths(eventData);
-    if (validationError) return res.status(400).json(validationError);
+    if (validationError) {
+      res.status(400).json(validationError);
+      return;
+    }
 
     const event = new Event(eventData); // Use normalized data
     const savedEvent = await event.save();
@@ -105,27 +113,31 @@ const createEvent = async (req, res) => {
       event: savedEvent,
       budgetId: budget._id,
     });
-  } catch (err) {
+  } catch (err: unknown) {
     // Keep existing error handling
-    if (err.name === "ValidationError") {
-      const messages = Object.values(err.errors).map((e) => e.message);
-      return res.status(400).json({ message: messages.join(", ") });
+    if (err instanceof Error && err.name === "ValidationError") {
+      const messages = Object.values((err as any).errors).map(
+        (e: any) => e.message,
+      );
+      res.status(400).json({ message: messages.join(", ") });
+      return;
     }
 
+    const message = err instanceof Error ? err.message : "An error ocurred";
     res.status(400).json({
-      message: err.message || "Something went wrong while creating the event.",
+      message,
     });
   }
 };
 // Get all events
-const getAllEvents = async (req, res) => {
+const getAllEvents = async (req: Request, res: Response): Promise<void> => {
   try {
     const isPermitted =
       req.user.role === "admin" ||
       req.user.role === "super_admin" ||
       req.user.role === "planner";
 
-    const filter = {
+    const filter: Record<string, unknown> = {
       organizationId: req.user.organization,
       isDeleted: false,
     };
@@ -193,13 +205,14 @@ const getAllEvents = async (req, res) => {
     );
 
     res.json(eventsWithVendors);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Get event by ID
-const getEventById = async (req, res) => {
+const getEventById = async (req: Request, res: Response): Promise<void> => {
   try {
     // find event
     const event = req.targetEvent;
@@ -212,9 +225,10 @@ const getEventById = async (req, res) => {
 
     // restrict access for archived events
     if (event.isArchived && ["viewer"].includes(req.user.role)) {
-      return res.status(403).json({
+      res.status(403).json({
         message: "You do not have permission to view archived events",
       });
+      return;
     }
 
     // Get all expenses for this event to calculate totals and get vendors
@@ -271,32 +285,35 @@ const getEventById = async (req, res) => {
     };
 
     res.json(responseData);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Update an event
-const updateEvent = async (req, res) => {
+const updateEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const existingEvent = req.targetEvent;
 
     if (existingEvent.isArchived) {
-      return res.status(403).json({
+      res.status(403).json({
         message:
           "Cannot update archived events. Please restore the event first.",
       });
+      return;
     }
 
     // Normalize the date if provided
-    let eventDate;
+    let eventDate: Date | undefined;
     if (req.body.date) {
       eventDate = normalizeEventDate(req.body.date);
       // Check if event date is in the past
       if (eventDate !== null && eventDate < new Date()) {
-        return res.status(400).json({
+        res.status(400).json({
           message: "Event date cannot be in the past",
         });
+        return;
       }
     }
 
@@ -311,7 +328,10 @@ const updateEvent = async (req, res) => {
 
     // field lengths validation
     const validationError = validateEventFieldLengths(updateData);
-    if (validationError) return res.status(400).json(validationError);
+    if (validationError) {
+      res.status(400).json(validationError);
+      return;
+    }
 
     const event = req.targetEvent;
 
@@ -327,30 +347,35 @@ const updateEvent = async (req, res) => {
     ]);
 
     res.json(event);
-  } catch (err) {
+  } catch (err: unknown) {
     // Keep existing error handling
-    if (err.name === "ValidationError") {
-      const messages = Object.values(err.errors).map((e) => e.message);
-      return res.status(400).json({ message: messages.join(", ") });
+    if (err instanceof Error && err.name === "ValidationError") {
+      const messages = Object.values((err as any).errors).map(
+        (e: any) => e.message,
+      );
+      res.status(400).json({ message: messages.join(", ") });
+      return;
     }
-
+    const message = err instanceof Error ? err.message : "An error occurred.";
     res.status(400).json({
-      message: err.message || "Something went wrong while updating the event.",
+      message,
     });
   }
 };
 
 // archive an event
-const archiveEvent = async (req, res) => {
+const archiveEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const event = req.targetEvent;
 
     if (event.isDeleted) {
-      return res.status(404).json({ message: "Event not found" });
+      res.status(404).json({ message: "Event not found" });
+      return;
     }
 
     if (event.isArchived) {
-      return res.status(409).json({ message: "Event is already archived." });
+      res.status(409).json({ message: "Event is already archived." });
+      return;
     }
 
     event.isArchived = true;
@@ -361,22 +386,26 @@ const archiveEvent = async (req, res) => {
       message: "Event archived successfully",
       event,
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // restore archived event
-const restoreEvent = async (req, res) => {
+const restoreEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const event = req.targetEvent;
 
     if (event.isDeleted) {
-      return res.status(404).json({ message: "Event not found" });
+      res.status(404).json({ message: "Event not found" });
+      return;
     }
 
     if (!event.isArchived) {
-      return res.status(409).json({ message: "Event is already active." });
+      res.status(409).json({ message: "Event is already active." });
+      return;
     }
 
     event.isArchived = false;
@@ -388,13 +417,15 @@ const restoreEvent = async (req, res) => {
       message: "Event restored successfully",
       event,
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Soft-delete event
-const deleteEvent = async (req, res) => {
+const deleteEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const deletedEvent = req.targetEvent;
 
@@ -491,12 +522,14 @@ const deleteEvent = async (req, res) => {
     }
 
     res.json({ message: "Event deleted", clientHardDeleted, clientName });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred";
+    res.status(500).json({ message });
   }
 };
 
-module.exports = {
+export {
   createEvent,
   getAllEvents,
   getEventById,
