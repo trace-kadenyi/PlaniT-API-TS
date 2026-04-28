@@ -1,11 +1,15 @@
-const Budget = require("../models/BudgetSchema");
-const Expense = require("../models/ExpenseSchema");
-const Event = require("../models/EventSchema");
+import { Request, Response } from "express";
+import mongoose from "mongoose";
 
-const mongoose = require("mongoose");
+import Budget from "../models/BudgetSchema";
+import Expense from "../models/ExpenseSchema";
+import Event from "../models/EventSchema";
 
 // Get budget by event ID
-const getBudgetByEventId = async (req, res) => {
+const getBudgetByEventId = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     // 1️⃣ Validate event ownership FIRST
     const event = await Event.findOne({
@@ -14,10 +18,11 @@ const getBudgetByEventId = async (req, res) => {
     }).select("_id");
 
     if (!event) {
-      return res.status(404).json({
+      res.status(404).json({
         error: "EventNotFound",
         message: "Event not found or does not belong to your organization",
       });
+      return;
     }
 
     // 2️⃣ Fetch budget (org-scoped)
@@ -27,7 +32,8 @@ const getBudgetByEventId = async (req, res) => {
     }).lean();
 
     if (!budget) {
-      return res.status(404).json({ message: "Budget not found" });
+      res.status(404).json({ message: "Budget not found" });
+      return;
     }
 
     // Calculate total expenses
@@ -48,13 +54,14 @@ const getBudgetByEventId = async (req, res) => {
       totalExpenses: expenses[0]?.total || 0,
       remainingBudget: budget.totalBudget - (expenses[0]?.total || 0),
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    res.status(500).json({ message });
   }
 };
 
 // Update budget
-const updateBudget = async (req, res) => {
+const updateBudget = async (req: Request, res: Response): Promise<void> => {
   try {
     // 1️⃣ Get the existing budget FIRST
     const existingBudget = await Budget.findOne({
@@ -63,7 +70,8 @@ const updateBudget = async (req, res) => {
     });
 
     if (!existingBudget) {
-      return res.status(404).json({ message: "Budget not found" });
+      res.status(404).json({ message: "Budget not found" });
+      return;
     }
 
     // 2️⃣ Check if anything actually changed
@@ -75,7 +83,8 @@ const updateBudget = async (req, res) => {
 
     // 3️⃣ If nothing changed, just return success without any checks
     if (!budgetChanged) {
-      return res.json(existingBudget);
+      res.json(existingBudget);
+      return;
     }
 
     // 4️⃣ ONLY NOW check if event is archived (since something actually changed)
@@ -85,18 +94,20 @@ const updateBudget = async (req, res) => {
     }).select("_id isArchived");
 
     if (!event) {
-      return res.status(404).json({
+      res.status(404).json({
         error: "EventNotFound",
         message: "Event not found or does not belong to your organization",
       });
+      return;
     }
 
     if (event.isArchived) {
-      return res.status(403).json({
+      res.status(403).json({
         error: "EventArchived",
         message:
           "Cannot update budget for archived events. Please restore the event first.",
       });
+      return;
     }
 
     // 5️⃣ Validate new totalBudget against expenses
@@ -115,9 +126,10 @@ const updateBudget = async (req, res) => {
 
       const totalExpenses = expenses[0]?.total || 0;
       if (totalBudget < totalExpenses) {
-        return res.status(400).json({
+        res.status(400).json({
           message: `New budget must be at least $${totalExpenses.toLocaleString()} (current expenses total)`,
         });
+        return;
       }
     }
 
@@ -125,16 +137,17 @@ const updateBudget = async (req, res) => {
     Object.assign(existingBudget, { totalBudget, notes });
     await existingBudget.save();
     res.json(existingBudget);
-  } catch (err) {
-    if (err.name === "ValidationError") {
-      return res.status(400).json({
-        message: Object.values(err.errors)
-          .map((e) => e.message)
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "ValidationError") {
+      res.status(400).json({
+        message: Object.values((err as any).errors)
+          .map((e: any) => e.message)
           .join(", "),
       });
+      return;
     }
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: (err as any).message });
   }
 };
 
-module.exports = { getBudgetByEventId, updateBudget };
+export { getBudgetByEventId, updateBudget };
