@@ -5,4 +5,4 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-module.exports = supabaseAdmin;
+export default supabaseAdmin;
