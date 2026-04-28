@@ -1,12 +1,14 @@
-const { PASSWORD_REGEX } = require("../constants/regex");
-const User = require("../models/UserSchema");
-const UserUpdateHistory = require("../models/UserUpdateHistory");
-const { generateDescription } = require("../utils/generateDescriptions");
+import { Request, Response } from "express";
+
+import { PASSWORD_REGEX } from "../constants/regex";
+import User from "../models/UserSchema";
+import UserUpdateHistory from "../models/UserUpdateHistory";
+import { generateDescription } from "../utils/generateDescriptions";
 
 // Get all users in current user's organization
-const getUsers = async (req, res) => {
+const getUsers = async (req: Request, res: Response): Promise<void> => {
   try {
-    let query = {
+    let query: Record<string, unknown> = {
       organization: req.user.organization,
     };
 
@@ -20,13 +22,15 @@ const getUsers = async (req, res) => {
     );
 
     res.json(users);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // Get single user
-const getUser = async (req, res) => {
+const getUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await User.findOne({
       _id: req.params.userId,
@@ -34,7 +38,8 @@ const getUser = async (req, res) => {
     }).select("-password -passwordResetToken -passwordResetExpires");
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      res.status(404).json({ message: "User not found" });
+      return;
     }
 
     // PREVENT VIEWERS/PLANNERS FROM ACCESSING DEACTIVATED USERS
@@ -42,19 +47,22 @@ const getUser = async (req, res) => {
       user.isDeactivated &&
       (req.user.role === "viewer" || req.user.role === "planner")
     ) {
-      return res.status(403).json({
+      res.status(403).json({
         message: "You don't have permission to view this user",
       });
+      return;
     }
 
     res.json(user);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // Add new user
-const createUser = async (req, res) => {
+const createUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, firstName, lastName, role, password } = req.body;
 
@@ -64,10 +72,11 @@ const createUser = async (req, res) => {
       const passwordRegex =
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])[A-Za-z\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/;
       if (!passwordRegex.test(password)) {
-        return res.status(400).json({
+        res.status(400).json({
           message:
             "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
         });
+        return;
       }
     }
 
@@ -78,9 +87,10 @@ const createUser = async (req, res) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({
+      res.status(400).json({
         message: "User already exists in this organization",
       });
+      return;
     }
 
     // Create the user
@@ -103,18 +113,21 @@ const createUser = async (req, res) => {
       message: "User added successfully",
       user: userResponse,
     });
-  } catch (err) {
-    if (err.code === 11000) {
-      return res.status(400).json({
+  } catch (err: unknown) {
+    if ((err as any).code === 11000) {
+      res.status(400).json({
         message: "User already exists in this organization",
       });
+      return;
     }
-    res.status(500).json({ message: err.message });
+    const message =
+      err instanceof Error ? err.message : "An error has occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // Update user details
-const updateUser = async (req, res) => {
+const updateUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { firstName, lastName, email, phone, newPassword, currentPassword } =
       req.body;
@@ -126,13 +139,15 @@ const updateUser = async (req, res) => {
     }).select("+password");
 
     if (!targetUser) {
-      return res.status(404).json({ message: "User not found" });
+      res.status(404).json({ message: "User not found" });
+      return;
     }
 
     if (targetUser.isDeactivated) {
-      return res.status(400).json({
+      res.status(400).json({
         message: "Cannot update a deactivated user",
       });
+      return;
     }
 
     const isSelf = req.user._id.toString() === req.params.userId;
@@ -179,9 +194,10 @@ const updateUser = async (req, res) => {
       // If changing own password, verify current password
       if (isSelf) {
         if (!currentPassword) {
-          return res.status(400).json({
+          res.status(400).json({
             message: "Current password is required to set a new password",
           });
+          return;
         }
 
         // Verify current password
@@ -191,26 +207,20 @@ const updateUser = async (req, res) => {
         );
 
         if (!isPasswordCorrect) {
-          return res.status(401).json({
+          res.status(401).json({
             message: "Current password is incorrect",
           });
+          return;
         }
       }
 
-      // If admin changing someone else's password, no current password needed
-      // but they must have permission
-      // else if (!["super_admin", "admin"].includes(req.user.role)) {
-      //   return res.status(403).json({
-      //     message: "Only admins can change other users' passwords",
-      //   });
-      // }
-
       // Validate new password
       if (!PASSWORD_REGEX.test(newPassword)) {
-        return res.status(400).json({
+        res.status(400).json({
           message:
             "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
         });
+        return;
       }
 
       changes.push({
@@ -228,10 +238,11 @@ const updateUser = async (req, res) => {
         organization: req.user.organization,
       }).select("-password -passwordResetToken -passwordResetExpires");
 
-      return res.json({
+      res.json({
         message: "No changes detected",
         user: currentUser,
       });
+      return;
     }
 
     // Apply ALL changes at once
@@ -282,33 +293,30 @@ const updateUser = async (req, res) => {
       message: "User updated successfully",
       user: updatedUser,
     });
-  } catch (err) {
-    if (err.code === 11000) {
-      return res.status(400).json({ message: "Email already exists" });
+  } catch (err: unknown) {
+    if ((err as any).code === 11000) {
+      res.status(400).json({ message: "Email already exists" });
+      return;
     }
-    res.status(500).json({ message: err.message });
+    const message =
+      err instanceof Error ? err.message : "An error has occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // Update user role
-const updateUserRole = async (req, res) => {
+const updateUserRole = async (req: Request, res: Response): Promise<void> => {
   try {
     const { role } = req.body;
 
     const targetUser = req.targetUser;
 
     if (targetUser.isDeactivated) {
-      return res.status(400).json({
+      res.status(400).json({
         message: "Cannot update a deactivated user",
       });
+      return;
     }
-
-    // Prevent changing super admins role (only super admins can do this)
-    // if (targetUser.role === "super_admin" && req.user.role !== "super_admin") {
-    //   return res.status(403).json({
-    //     message: "Only super admins can change super admin roles",
-    //   });
-    // }
 
     // Track role change
     const changes = [
@@ -345,27 +353,31 @@ const updateUserRole = async (req, res) => {
       message: "User role updated successfully",
       user: updatedUser,
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // Delete user
-const deleteUser = async (req, res) => {
+const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
     // Prevent users from removing themselves
     if (req.params.userId === req.user._id.toString()) {
-      return res.status(400).json({
+      res.status(400).json({
         message: "Cannot remove yourself",
       });
+      return;
     }
 
     const targetUser = req.targetUser;
 
     if (targetUser.isDeactivated) {
-      return res.status(400).json({
+      res.status(400).json({
         message: "User is already deactivated.",
       });
+      return;
     }
 
     // log deletions
@@ -394,13 +406,17 @@ const deleteUser = async (req, res) => {
     res.json({
       message: "User removed successfully",
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // Get user update history
-const getUserUpdateHistory = async (req, res) => {
+const getUserUpdateHistory = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const history = await UserUpdateHistory.find({
       userId: req.params.userId,
@@ -411,13 +427,14 @@ const getUserUpdateHistory = async (req, res) => {
       .limit(50);
 
     res.json(history);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "An error occurred.";
+    res.status(500).json({ message });
   }
 };
 
 // reactivate user
-const reactivateUser = async (req, res) => {
+const reactivateUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const targetUser = await User.findOne({
       _id: req.params.userId,
@@ -426,9 +443,10 @@ const reactivateUser = async (req, res) => {
     });
 
     if (!targetUser) {
-      return res.status(404).json({
+      res.status(404).json({
         message: "Deactivated user not found",
       });
+      return;
     }
 
     targetUser.isDeactivated = false;
@@ -463,8 +481,10 @@ const reactivateUser = async (req, res) => {
       message: "User reactivated successfully",
       user: cleanUser,
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "An error has occurred.";
+    res.status(500).json({ message });
   }
 };
 
