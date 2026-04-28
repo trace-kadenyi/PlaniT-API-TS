@@ -58,7 +58,7 @@ const createSendToken = (
 };
 
 // Signup
-exports.signup = async (req: Request, res: Response): Promise<void> => {
+export const signup = async (req: Request, res: Response): Promise<void> => {
   try {
     const { firstName, lastName, email, password, organizationName } = req.body;
 
@@ -123,7 +123,7 @@ exports.signup = async (req: Request, res: Response): Promise<void> => {
 };
 
 // Login
-exports.login = async (req: Request, res: Response): Promise<void> => {
+export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
@@ -185,7 +185,10 @@ exports.login = async (req: Request, res: Response): Promise<void> => {
 };
 
 // Refresh token
-exports.refreshToken = async (req: Request, res: Response): Promise<void> => {
+export const refreshToken = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const refreshToken = req.cookies.refreshToken; // Get from cookie
 
@@ -248,7 +251,10 @@ exports.refreshToken = async (req: Request, res: Response): Promise<void> => {
 };
 
 // Forgot password
-exports.forgotPassword = async (req: Request, res: Response): Promise<void> => {
+export const forgotPassword = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   let user: IUser | null = null;
   try {
     // 1) Get user based on POSTed email
@@ -285,7 +291,10 @@ exports.forgotPassword = async (req: Request, res: Response): Promise<void> => {
 };
 
 // Reset password
-exports.resetPassword = async (req: Request, res: Response): Promise<void> => {
+export const resetPassword = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     // 1) Get user based on the token
     const hashedToken = crypto
@@ -322,7 +331,7 @@ exports.resetPassword = async (req: Request, res: Response): Promise<void> => {
 };
 
 // Protect middleware (to be used in routes)
-exports.protect = async (
+export const protect = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -382,7 +391,7 @@ exports.protect = async (
 };
 
 // Restrict to certain roles
-exports.restrictTo = (...roles: string[]) => {
+export const restrictTo = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!roles.includes(req.user.role as string)) {
       res.status(403).json({
@@ -396,7 +405,7 @@ exports.restrictTo = (...roles: string[]) => {
 };
 
 // Logout - clear the refresh token cookie
-exports.logout = (req: Request, res: Response): void => {
+export const logout = (req: Request, res: Response): void => {
   const isProduction = process.env.NODE_ENV === "production";
 
   res.cookie("refreshToken", "loggedout", {
