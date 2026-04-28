@@ -215,7 +215,7 @@ const getExpensesByEventId = async (
       .sort({ createdAt: -1 });
 
     const budgetStatus = await getBudgetStatus(
-      req.params.eventId,
+      req.params.eventId as string,
       req.user.organization,
     );
 
@@ -574,7 +574,7 @@ const getExpensesSummary = async (
     res.json({
       categories: summary,
       budgetStatus: await getBudgetStatus(
-        req.params.eventId,
+        req.params.eventId as string,
         req.user.organization,
       ),
     });
