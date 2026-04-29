@@ -1,3 +1,9 @@
+import { IUser } from "../types/models";
+
+// ============================================================
+// Constants — `as const` gives literal types instead of string
+// ============================================================
+
 const PERMISSIONS = {
   VIEW: "view",
   CREATE: "create",
@@ -11,7 +17,7 @@ const PERMISSIONS = {
   MANAGE_EVENT_STATUS: "manage_event_status",
   VIEW_AUDIT_LOGS: "view_audit_logs",
   DELETE_PAID_EXPENSE: "delete_paid_expense",
-};
+} as const;
 
 const RESOURCES = {
   VENDOR: "vendor",
@@ -24,28 +30,41 @@ const RESOURCES = {
   AUDIT_LOG: "audit_log",
   ORGANIZATION: "organization",
   USER_HISTORY: "user_history",
-};
+} as const;
 
 const ROLES = {
   VIEWER: "viewer",
   PLANNER: "planner",
   ADMIN: "admin",
   SUPER_ADMIN: "super_admin",
-};
+} as const;
+
+// ============================================================
+// Derived types from the constants
+// ============================================================
+
+export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
+export type Resource = (typeof RESOURCES)[keyof typeof RESOURCES];
+export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 // 2. Role hierarchy
-const ROLE_HIERARCHY = {
+const ROLE_HIERARCHY: Record<Role, number> = {
   [ROLES.VIEWER]: 1,
   [ROLES.PLANNER]: 2,
   [ROLES.ADMIN]: 3,
   [ROLES.SUPER_ADMIN]: 4,
 };
 
-// 3. Base permissions generator
-const getBasePermissionsForRole = (role) => {
-  const hierarchy = ROLE_HIERARCHY[role] || 0;
+// ============================================================
+// Base permissions
+// ============================================================
+type PermissionsMap = Record<Resource, Permission[]>;
 
-  const basePermissions = {
+// 3. Base permissions generator
+const getBasePermissionsForRole = (role: string): PermissionsMap => {
+  const hierarchy = ROLE_HIERARCHY[role as Role] || 0;
+
+  const basePermissions: PermissionsMap = {
     [RESOURCES.VENDOR]: [PERMISSIONS.VIEW],
     [RESOURCES.EVENT]: [PERMISSIONS.VIEW, PERMISSIONS.DRAG_CARD],
     [RESOURCES.TASK]: [PERMISSIONS.VIEW],
@@ -117,13 +136,26 @@ const getBasePermissionsForRole = (role) => {
   return basePermissions;
 };
 
+// ============================================================
+// User modification rules
+// ============================================================
+interface TargetUser {
+  _id?: { toString(): string };
+  role?: string;
+  isDeactivated?: boolean;
+}
+
 // 4. User modification rules (mirroring canModifyUser)
-const canModifyUser = (currentUser, targetUser, action) => {
+const canModifyUser = (
+  currentUser: IUser,
+  targetUser: TargetUser,
+  action: string,
+): boolean => {
   // Safety check
   if (!currentUser || !targetUser) return false;
 
   const currentRole = currentUser.role;
-  const targetRole = targetUser.role || targetUser;
+  const targetRole = targetUser.role || String(targetUser);
   const isSelf =
     targetUser._id && targetUser._id.toString() === currentUser._id.toString();
 
@@ -143,25 +175,32 @@ const canModifyUser = (currentUser, targetUser, action) => {
   }
 
   // RULE 4: Only Admins+ can modify other users
-  if (currentRole !== ROLES.ADMIN && currentRole !== ROLES.SUPER_ADMIN) {
+  if (
+    (currentRole as string) !== ROLES.ADMIN &&
+    (currentRole as string) !== ROLES.SUPER_ADMIN
+  ) {
     return false; // Viewers and Planners CANNOT modify other users
   }
 
   // RULE 5: Admins can only modify users with lower role (not equal!)
-  const currentLevel = ROLE_HIERARCHY[currentRole];
-  const targetLevel = ROLE_HIERARCHY[targetRole];
+  const currentLevel = ROLE_HIERARCHY[currentRole as Role];
+  const targetLevel = ROLE_HIERARCHY[targetRole as Role];
 
   // Admins can edit lower roles only
   return currentLevel >= targetLevel;
 };
 
+// ============================================================
+// Main permission checker
+// ============================================================
+
 // 5. Main permission checker
 const checkPermission = (
-  currentUser,
-  permission,
-  resource = null,
-  targetUser = null,
-) => {
+  currentUser: IUser,
+  permission: string,
+  resource: string | null = null,
+  targetUser: TargetUser | null = null,
+): boolean => {
   if (!currentUser?.role || !resource) return false;
 
   // SPECIAL CASE 1: Self history view (bypasses base permissions)
@@ -202,9 +241,9 @@ const checkPermission = (
 
   // RULE 1: Get base permissions based on role
   const basePermissions = getBasePermissionsForRole(userRole);
-  const resourcePermissions = basePermissions[resource] || [];
+  const resourcePermissions = basePermissions[resource as Resource] || [];
 
-  if (!resourcePermissions.includes(permission)) {
+  if (!resourcePermissions.includes(permission as Permission)) {
     return false;
   }
 
@@ -218,14 +257,16 @@ const checkPermission = (
   if (
     resource === RESOURCES.USER &&
     targetUser &&
-    [
-      PERMISSIONS.EDIT,
-      PERMISSIONS.DELETE,
-      PERMISSIONS.MANAGE_USERS,
-      PERMISSIONS.ARCHIVE,
-      PERMISSIONS.DELETE_ALL,
-      PERMISSIONS.CREATE,
-    ].includes(permission)
+    (
+      [
+        PERMISSIONS.EDIT,
+        PERMISSIONS.DELETE,
+        PERMISSIONS.MANAGE_USERS,
+        PERMISSIONS.ARCHIVE,
+        PERMISSIONS.DELETE_ALL,
+        PERMISSIONS.CREATE,
+      ] as string[]
+    ).includes(permission)
   ) {
     return canModifyUser(currentUser, targetUser, permission);
   }
@@ -283,7 +324,7 @@ const checkPermission = (
   return true;
 };
 
-module.exports = {
+export {
   PERMISSIONS,
   RESOURCES,
   ROLES,
